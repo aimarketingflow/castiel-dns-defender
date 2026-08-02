@@ -1,0 +1,45 @@
+# Build artifacts
+castiel
+castiel.exe
+castiel-arm64
+castiel-arm64.exe
+attack-sim
+linux_build/castiel
+linux_build/castiel-arm64
+windows_build/castiel.exe
+windows_build/castiel-arm64.exe
+cmd/attack-sim/attack-sim
+*.o
+*.exe
+*.dll
+*.so
+*.dylib
+
+# macOS app build
+macos-app/.build/
+
+# Icon generation
+macos-app/Castiel.iconset/
+
+# Logs
+logs/
+*.log
+
+# Sysdiagnose (large sensitive archive)
+sysdiagnose_*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Config with secrets (keep template, ignore local overrides)
+config.local.yaml
+*.pem
+*.key

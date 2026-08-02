@@ -1,0 +1,25 @@
+[Unit]
+Description=Castiel DNS Defense Daemon
+Documentation=https://github.com/castiel/dns
+After=network-online.target
+Wants=network-online.target
+After=systemd-resolved.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/castiel -config /usr/local/etc/castiel/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=4096
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/usr/local/etc/castiel /usr/local/var/log/castiel /run/castiel
+PrivateTmp=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,134 @@
+# Castiel DNS Defense — Windows Configuration
+#
+# This config uses system DNS redirect (127.0.0.1) instead of PF/nftables.
+
+server:
+  listen_addr: "127.0.0.1"
+  listen_port: 53            # Bind directly to port 53 on Windows
+  upstream: ["1.1.1.1:53", "9.9.9.9:53"]
+  upstream_timeout: "5s"
+  use_doh: true
+  doh_upstream: "https://cloudflare-dns.com/dns-query"
+
+dnssec:
+  enabled: true
+  trust_anchor_file: "data/root-trust-anchor.txt"
+  reject_bogus: false
+
+rate_limit:
+  enabled: true
+  per_ip_qps: 50
+  global_qps: 500
+  nxdomain_per_ip_qps: 10
+  window_seconds: 5
+  action: "truncate"
+  delay_ms: 100
+
+tunneling_detection:
+  enabled: true
+  entropy_threshold: 3.5
+  min_label_length: 8
+  max_subdomain_depth: 5
+  txt_record_alert: true
+  cdn_whitelist:
+    - "cloudfront.net"
+    - "cloudflare.com"
+    - "akamai.net"
+    - "fastly.net"
+    - "amazonaws.com"
+    - "googleusercontent.com"
+    - "azureedge.net"
+    - "incapdns.net"
+
+dga_detection:
+  enabled: true
+  entropy_threshold: 3.0
+  consonant_ratio_threshold: 0.7
+  min_domain_length: 8
+  ngram_model: "data/legitimate-domains.txt"
+  newly_registered_days: 30
+
+rebinding_protection:
+  enabled: true
+  block_public_to_private: true
+  private_ranges:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "127.0.0.0/8"
+    - "169.254.0.0/16"
+    - "::1/128"
+    - "fc00::/7"
+    - "fe80::/10"
+
+blocklists:
+  enabled: true
+  refresh_interval: 3600
+  feeds:
+    - name: "urlhaus"
+      url: "https://urlhaus.abuse.ch/downloads/hostfile/"
+      format: "hosts"
+      enabled: true
+    - name: "openphish"
+      url: "https://openphish.com/feed.txt"
+      format: "url_list"
+      enabled: true
+    - name: "stevenblack"
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+      format: "hosts"
+      enabled: true
+  custom_block_file: "data/custom_block.txt"
+  custom_allow_file: "data/custom_allow.txt"
+
+zone_transfer:
+  block_axfr: true
+  block_ixfr: true
+  alert_only: false
+
+c2_detection:
+  enabled: true
+  ttl_volatility_threshold: 100
+  min_ip_count: 3
+  check_interval: 60
+
+alerts:
+  enabled: true
+  log_file: "logs/castiel_alerts.jsonl"
+  webhook_url: ""
+  webhook_enabled: false
+  syslog_enabled: false     # No syslog on Windows; uses Event Log
+  min_severity: "warn"
+  rate_limit_alerts: true
+  desktop_notification: true  # Uses Windows Toast notifications
+
+metrics:
+  enabled: true
+  bind_addr: "127.0.0.1:9090"
+  path: "/metrics"
+
+# Windows: DNS redirect via system DNS settings (replaces pf: on macOS, nft: on Linux)
+dns_redirect:
+  enabled: true
+  method: "system_dns"    # "system_dns" (default), "portproxy", or "windivert"
+  redirect_port: 53       # Castiel binds directly to :53
+  interface: ""           # empty = all interfaces
+  bind_port_53: true
+
+# PF and nft are ignored on Windows (only used on macOS/Linux)
+pf:
+  enabled: false
+  anchor_name: "castiel"
+  redirect_port: 5300
+  interface: "lo0"
+
+nft:
+  enabled: false
+  backend: "nftables"
+  redirect_port: 5300
+  interface: ""
+
+cache:
+  enabled: true
+  max_entries: 10000
+  default_ttl: 300
+  negative_ttl: 60

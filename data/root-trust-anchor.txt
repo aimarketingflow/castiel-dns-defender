@@ -1,0 +1,11 @@
+; Root zone trust anchor (IANA published KSK)
+; This is the current DNS root Key Signing Key (KSK-2017), used to bootstrap
+; DNSSEC chain-of-trust validation from the root of the DNS hierarchy.
+;
+; Source: https://data.iana.org/root-anchors/root-anchors.xml
+; Key Tag: 20326, Algorithm: 8 (RSASHA256), valid since 2017-07-11
+;
+; If this key is ever rolled over by IANA, update this file with the new anchor.
+; DAD will fall back to AD-bit-only validation if this file is missing or invalid.
+
+. IN DNSKEY 257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU=

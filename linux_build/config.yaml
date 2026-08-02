@@ -1,0 +1,135 @@
+# Castiel DNS Defense — Linux Configuration
+#
+# This config uses nftables instead of PF for DNS traffic redirection.
+
+server:
+  listen_addr: "127.0.0.1"
+  listen_port: 5300
+  upstream: ["1.1.1.1:53", "9.9.9.9:53"]
+  upstream_timeout: "5s"
+  use_doh: true
+  doh_upstream: "https://cloudflare-dns.com/dns-query"
+
+dnssec:
+  enabled: true
+  trust_anchor_file: "data/root-trust-anchor.txt"
+  reject_bogus: false
+
+rate_limit:
+  enabled: true
+  per_ip_qps: 50
+  global_qps: 500
+  nxdomain_per_ip_qps: 10
+  window_seconds: 5
+  action: "truncate"
+  delay_ms: 100
+
+tunneling_detection:
+  enabled: true
+  entropy_threshold: 3.5
+  min_label_length: 8
+  max_subdomain_depth: 5
+  txt_record_alert: true
+  cdn_whitelist:
+    - "cloudfront.net"
+    - "cloudflare.com"
+    - "akamai.net"
+    - "fastly.net"
+    - "amazonaws.com"
+    - "googleusercontent.com"
+    - "azureedge.net"
+    - "incapdns.net"
+
+dga_detection:
+  enabled: true
+  entropy_threshold: 3.0
+  consonant_ratio_threshold: 0.7
+  min_domain_length: 8
+  ngram_model: "data/legitimate-domains.txt"
+  newly_registered_days: 30
+
+rebinding_protection:
+  enabled: true
+  block_public_to_private: true
+  private_ranges:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "127.0.0.0/8"
+    - "169.254.0.0/16"
+    - "::1/128"
+    - "fc00::/7"
+    - "fe80::/10"
+
+blocklists:
+  enabled: true
+  refresh_interval: 3600
+  feeds:
+    - name: "urlhaus"
+      url: "https://urlhaus.abuse.ch/downloads/hostfile/"
+      format: "hosts"
+      enabled: true
+    - name: "openphish"
+      url: "https://openphish.com/feed.txt"
+      format: "url_list"
+      enabled: true
+    - name: "stevenblack"
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+      format: "hosts"
+      enabled: true
+    - name: "adguard-dns"
+      url: "https://adguardteam.github.io/AdGuardDNS/filter.txt"
+      format: "adguard"
+      enabled: false
+    - name: "dns-bh"
+      url: "https://mirror1.malwaredomains.com/files/justdomains"
+      format: "domain_list"
+      enabled: false
+  custom_block_file: "data/custom_block.txt"
+  custom_allow_file: "data/custom_allow.txt"
+
+zone_transfer:
+  block_axfr: true
+  block_ixfr: true
+  alert_only: false
+
+c2_detection:
+  enabled: true
+  ttl_volatility_threshold: 100
+  min_ip_count: 3
+  check_interval: 60
+
+alerts:
+  enabled: true
+  log_file: "/usr/local/var/log/castiel/castiel_alerts.jsonl"
+  webhook_url: ""
+  webhook_enabled: false
+  syslog_enabled: true
+  min_severity: "warn"
+  rate_limit_alerts: true
+  desktop_notification: true
+
+metrics:
+  enabled: true
+  bind_addr: "127.0.0.1:9090"
+  path: "/metrics"
+
+# Linux: nftables DNS redirect (replaces pf: section on macOS)
+nft:
+  enabled: true
+  backend: "nftables"  # "nftables" (default) or "iptables" for legacy systems
+  redirect_port: 5300
+  interface: ""        # empty = all interfaces, or "eth0", "wlan0", etc.
+
+# PF config is ignored on Linux (only used on macOS)
+pf:
+  enabled: false
+  anchor_name: "castiel"
+  redirect_port: 5300
+  interface: "lo0"
+
+cache:
+  enabled: true
+  max_entries: 10000
+  default_ttl: 300
+  negative_ttl: 60

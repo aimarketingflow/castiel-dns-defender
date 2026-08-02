@@ -1,0 +1,142 @@
+# Castiel — DNS Defense
+# Configuration File
+
+server:
+  listen_addr: "127.0.0.1"
+  listen_port: 5300            # Local proxy port (PF redirects :53 -> :5300)
+  upstream:
+    - "1.1.1.1:53"            # Cloudflare
+    - "9.9.9.9:53"            # Quad9
+  upstream_timeout: 5s
+  doh_upstream: "https://cloudflare-dns.com/dns-query"  # DoH for encrypted upstream
+  use_doh: true
+
+# DNSSEC validation
+dnssec:
+  enabled: true
+  trust_anchor_file: "data/root-trust-anchor.txt"  # Root KSK for full chain validation; empty/missing = AD-bit-only fallback
+  reject_bogus: true          # Drop responses that fail DNSSEC validation
+
+# Rate limiting (DDoS protection)
+rate_limit:
+  enabled: true
+  per_ip_qps: 50              # Max queries per second per source IP
+  global_qps: 5000            # Global queries per second ceiling
+  nxdomain_per_ip_qps: 10     # Max NXDOMAIN responses per IP per second
+  window_seconds: 15          # Rolling window for token bucket
+  action: "drop"              # drop | truncate (TC=1) | delay
+  delay_ms: 100               # Only used if action=delay
+
+# Entropy-based tunneling detection
+tunneling_detection:
+  enabled: true
+  entropy_threshold: 3.5      # Shannon entropy threshold for subdomain labels
+  min_label_length: 12        # Minimum subdomain label length to score
+  max_subdomain_depth: 5      # Max subdomain labels to analyze
+  txt_record_alert: true      # Alert on suspicious TXT record volumes
+  cdn_whitelist:              # High-entropy legitimate domains to skip
+    - "cloudfront.net"
+    - "akamai.net"
+    - "cloudflare.com"
+    - "amazonaws.com"
+    - "googleusercontent.com"
+
+# DGA detection
+dga_detection:
+  enabled: true
+  entropy_threshold: 3.0      # Entropy threshold for apex domain
+  consonant_ratio_threshold: 0.7  # Max consonant-to-vowel ratio
+  min_domain_length: 8
+  ngram_model: "data/legitimate-domains.txt"  # N-gram training corpus (one domain per line)
+  newly_registered_days: 7    # Flag domains registered < N days ago (if WHOIS available)
+
+# DNS rebinding protection
+rebinding_protection:
+  enabled: true
+  block_public_to_private: true   # Block public FQDNs resolving to RFC1918 IPs
+  private_ranges:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "127.0.0.0/8"
+    - "169.254.0.0/16"
+    - "fc00::/7"
+    - "fe80::/10"
+
+# Blocklists / threat intelligence feeds
+blocklists:
+  enabled: true
+  refresh_interval: 3600      # Seconds between refreshes (1 hour)
+  feeds:
+    - name: "urlhaus"
+      url: "https://urlhaus.abuse.ch/downloads/hostfile/"
+      format: "hosts"
+      enabled: true
+    - name: "openphish"
+      url: "https://openphish.com/feed.txt"
+      format: "url_list"
+      enabled: true
+    - name: "stevenblack"
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+      format: "hosts"
+      enabled: true
+    - name: "adguard-dns"
+      url: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/malware.txt"
+      format: "domain_list"
+      enabled: true
+    - name: "dns-bh"
+      url: "https://mirror1.malwaredomains.com/files/justdomains"
+      format: "domain_list"
+      enabled: true
+    - name: "oisd"
+      url: "https://big.oisd.nl/domainswild"
+      format: "domain_list"
+      enabled: false
+  custom_block_file: "data/custom_block.txt"
+  custom_allow_file: "data/custom_allow.txt"
+
+# Zone transfer protection
+zone_transfer:
+  block_axfr: true            # Block all AXFR requests
+  block_ixfr: true            # Block all IXFR requests
+  alert_only: false           # If true, log but don't block
+
+# C2 / fast-flux detection
+c2_detection:
+  enabled: true
+  ttl_volatility_threshold: 60   # Seconds - flag IPs with TTL < this
+  min_ip_count: 5                # Min unique IPs for fast-flux suspicion
+  check_interval: 300            # Seconds between fast-flux checks
+
+# Alerting
+alerts:
+  enabled: true
+  log_file: "logs/castiel_alerts.jsonl"
+  webhook_url: ""             # Slack/Discord webhook
+  webhook_enabled: false
+  syslog_enabled: true        # Send to macOS syslog (unified logging)
+  min_severity: "warn"        # debug | info | warn | critical
+  rate_limit_alerts: true     # Don't flood alerts (max 10/min per type)
+  desktop_notification: true  # macOS Notification Center
+
+# Prometheus metrics
+metrics:
+  enabled: true
+  bind_addr: "127.0.0.1:9090"
+  path: "/metrics"
+
+# PF firewall integration (macOS)
+pf:
+  enabled: true
+  anchor_name: "castiel"
+  redirect_port: 5300          # Redirect DNS traffic to this port
+  interface: "lo0"            # Loopback for local traffic
+  # For network-wide: set interface to your active interface (e.g., en0)
+  # and enable forwarding
+
+# Cache
+cache:
+  enabled: true
+  max_entries: 50000
+  default_ttl: 300            # Default cache TTL in seconds
+  negative_ttl: 60            # TTL for NXDOMAIN caching

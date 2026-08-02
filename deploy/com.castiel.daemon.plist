@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.castiel.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/castiel</string>
+        <string>-config</string>
+        <string>/usr/local/etc/castiel/config.yaml</string>
+    </array>
+
+    <!-- Run as root for PF firewall redirect (port 53 → proxy) -->
+    <key>UserName</key>
+    <string>root</string>
+
+    <key>GroupName</key>
+    <string>wheel</string>
+
+    <!-- Start on boot -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Keep alive: restart if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <!-- Restart delay after crash (seconds) -->
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <!-- Log output -->
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/castiel/daemon.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/castiel/daemon.err</string>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CASTIEL_ROOT</key>
+        <string>/usr/local/etc/castiel</string>
+    </dict>
+
+    <!-- Process type: background daemon -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Nice priority: slightly elevated for DNS responsiveness -->
+    <key>Nice</key>
+    <integer>-5</integer>
+
+    <!-- Limit open file descriptors -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>256</integer>
+    </dict>
+
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>512</integer>
+    </dict>
+</dict>
+</plist>

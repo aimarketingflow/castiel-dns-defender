@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DNS Attack Defender — Open Source Research &amp; Tool Specification</title>
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #161b22; --surface2: #1c2333; --border: #30363d;
+      --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --accent2: #3fb950;
+      --danger: #f85149; --warning: #d29922; --purple: #bc8cff; --cyan: #76e3ea;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.7; font-size:15px; }
+    .hero { background:linear-gradient(180deg,#0d1117,#161b22); border-bottom:1px solid var(--border); padding:4rem 2rem 3rem; text-align:center; position:relative; overflow:hidden; }
+    .hero::before { content:''; position:absolute; inset:-50%; width:200%; height:200%; background:radial-gradient(circle at 30% 50%,rgba(88,166,255,.06),transparent 50%),radial-gradient(circle at 70% 50%,rgba(188,140,255,.04),transparent 50%); pointer-events:none; }
+    .hero h1 { font-size:2.8rem; font-weight:800; background:linear-gradient(135deg,#58a6ff,#bc8cff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:.5rem; position:relative; }
+    .hero .subtitle { color:var(--text-muted); font-size:1.15rem; max-width:640px; margin:0 auto; position:relative; }
+    .hero .badge { display:inline-block; margin-top:1.25rem; padding:.35rem .9rem; border-radius:999px; font-size:.78rem; font-weight:600; background:rgba(88,166,255,.12); color:var(--accent); border:1px solid rgba(88,166,255,.25); position:relative; }
+    .container { max-width:1120px; margin:0 auto; padding:2rem 1.5rem; }
+    .toc { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.75rem 2rem; margin-bottom:2.5rem; }
+    .toc h2 { font-size:1rem; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:1rem; }
+    .toc ol { padding-left:1.4rem; } .toc li { margin-bottom:.35rem; }
+    .toc a { color:var(--accent); text-decoration:none; font-weight:500; } .toc a:hover { text-decoration:underline; }
+    section { margin-bottom:3rem; }
+    section>h2 { font-size:1.6rem; font-weight:700; margin-bottom:1rem; padding-bottom:.5rem; border-bottom:2px solid var(--border); }
+    section>h2 .num { color:var(--accent); margin-right:.4rem; }
+    h3 { font-size:1.15rem; font-weight:600; margin:1.5rem 0 .5rem; color:var(--cyan); }
+    h4 { font-size:1rem; font-weight:600; margin:1rem 0 .4rem; color:var(--purple); }
+    p { margin-bottom:.75rem; } ul,ol { padding-left:1.5rem; margin-bottom:.75rem; } li { margin-bottom:.3rem; }
+    .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1.25rem; margin:1rem 0; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.5rem; transition:border-color .2s; }
+    .card:hover { border-color:var(--accent); }
+    .card .card-title { font-size:1.05rem; font-weight:700; margin-bottom:.25rem; display:flex; align-items:center; gap:.5rem; }
+    .card .card-title a { color:var(--accent); text-decoration:none; } .card .card-title a:hover { text-decoration:underline; }
+    .card .lang-badge { font-size:.7rem; padding:.15rem .5rem; border-radius:999px; font-weight:600; }
+    .lang-rust { background:rgba(222,143,68,.15); color:#de8f44; border:1px solid rgba(222,143,68,.3); }
+    .lang-go { background:rgba(0,173,216,.12); color:#00ADD8; border:1px solid rgba(0,173,216,.3); }
+    .lang-python { background:rgba(53,114,165,.15); color:#3572A5; border:1px solid rgba(53,114,165,.3); }
+    .lang-ts { background:rgba(49,120,198,.15); color:#3178C6; border:1px solid rgba(49,120,198,.3); }
+    .lang-elixir { background:rgba(110,104,163,.15); color:#6e68a3; border:1px solid rgba(110,104,163,.3); }
+    .lang-cpp { background:rgba(243,75,125,.12); color:#f34b7d; border:1px solid rgba(243,75,125,.3); }
+    .lang-lua { background:rgba(0,0,128,.15); color:#7777ff; border:1px solid rgba(0,0,128,.3); }
+    .lang-c { background:rgba(85,85,85,.15); color:#aaa; border:1px solid rgba(85,85,85,.3); }
+    .card .card-desc { color:var(--text-muted); font-size:.88rem; margin-bottom:.5rem; }
+    .card .card-meta { font-size:.78rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:.75rem; }
+    .table-wrap { overflow-x:auto; margin:1rem 0; }
+    table { width:100%; border-collapse:collapse; font-size:.88rem; }
+    th,td { text-align:left; padding:.6rem .85rem; border:1px solid var(--border); }
+    th { background:var(--surface2); font-weight:600; color:var(--accent); white-space:nowrap; }
+    td { background:var(--surface); } tr:hover td { background:var(--surface2); }
+    .attack-tag { display:inline-block; padding:.2rem .6rem; border-radius:6px; font-size:.75rem; font-weight:600; margin:.15rem .2rem; }
+    .tag-volumetric { background:rgba(248,81,73,.12); color:var(--danger); border:1px solid rgba(248,81,73,.25); }
+    .tag-exfil { background:rgba(210,153,34,.12); color:var(--warning); border:1px solid rgba(210,153,34,.25); }
+    .tag-intercept { background:rgba(188,140,255,.12); color:var(--purple); border:1px solid rgba(188,140,255,.25); }
+    .tag-recon { background:rgba(118,227,234,.12); color:var(--cyan); border:1px solid rgba(118,227,234,.25); }
+    .tag-evasion { background:rgba(63,185,80,.12); color:var(--accent2); border:1px solid rgba(63,185,80,.25); }
+    .callout { border-left:3px solid var(--accent); background:var(--surface); padding:1rem 1.25rem; border-radius:0 8px 8px 0; margin:1rem 0; font-size:.92rem; }
+    .callout.warn { border-left-color:var(--warning); } .callout.green { border-left-color:var(--accent2); }
+    code { background:var(--surface2); padding:.15rem .4rem; border-radius:4px; font-size:.85em; font-family:'SF Mono','Fira Code',monospace; }
+    pre { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; overflow-x:auto; margin:.75rem 0; font-size:.82rem; line-height:1.6; }
+    pre code { background:none; padding:0; }
+    .verdict { background:linear-gradient(135deg,rgba(63,185,80,.06),rgba(88,166,255,.06)); border:1px solid rgba(63,185,80,.25); border-radius:12px; padding:1.5rem 2rem; margin:1.5rem 0; }
+    .verdict h3 { color:var(--accent2); margin-top:0; }
+    footer { text-align:center; padding:2rem; color:var(--text-muted); font-size:.82rem; border-top:1px solid var(--border); }
+    @media(max-width:640px) { .hero h1{font-size:1.8rem;} .card-grid{grid-template-columns:1fr;} .container{padding:1.5rem 1rem;} }
+  </style>
+</head>
+<body>
+<header class="hero">
+  <h1>DNS Attack Defender</h1>
+  <p class="subtitle">Comprehensive research on open-source tools for real-time DNS attack detection, prevention, and alerting.</p>
+  <span class="badge">Research Document — August 2026</span>
+</header>
+<div class="container">
+<nav class="toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#threat-landscape">DNS Threat Landscape &amp; Attack Taxonomy</a></li>
+    <li><a href="#detection-tools">Detection &amp; Monitoring Tools</a></li>
+    <li><a href="#prevention-tools">Prevention &amp; Filtering Tools</a></li>
+    <li><a href="#ids-nids">Network IDS with DNS Capabilities</a></li>
+    <li><a href="#ml-tools">ML / AI-Enhanced Tools</a></li>
+    <li><a href="#honeypots">DNS Honeypots &amp; Sinkholes</a></li>
+    <li><a href="#logging-telemetry">DNS Logging &amp; Telemetry Pipelines</a></li>
+    <li><a href="#rate-limiting">Rate Limiting &amp; DDoS Mitigation</a></li>
+    <li><a href="#comparison">Head-to-Head Feature Comparison</a></li>
+    <li><a href="#architecture">Proposed Architecture for DNS Attack Defender</a></li>
+    <li><a href="#blocking-coverage">Blocking Coverage Matrix</a></li>
+    <li><a href="#recommendations">Recommendations &amp; Next Steps</a></li>
+  </ol>
+</nav>
+
+<!-- §1 THREAT LANDSCAPE -->
+<section id="threat-landscape">
+  <h2><span class="num">1.</span> DNS Threat Landscape &amp; Attack Taxonomy</h2>
+  <p>DNS is both a critical service target <strong>and</strong> a weapon. Attacks fall into five categories:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Category</th><th>Goal</th><th>Attack Types</th><th>Tag</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Volumetric / DDoS</strong></td><td>Overwhelm DNS infra</td><td>DNS Amplification, Water Torture (Random Subdomain), NXDOMAIN Flood</td><td><span class="attack-tag tag-volumetric">Volumetric</span></td></tr>
+      <tr><td><strong>Interception</strong></td><td>Redirect users</td><td>Cache Poisoning, DNS Hijacking, Subdomain Takeover, DNS Rebinding, On-Path MITM</td><td><span class="attack-tag tag-intercept">Intercept</span></td></tr>
+      <tr><td><strong>Exfiltration</strong></td><td>Smuggle data out</td><td>DNS Tunneling (iodine, dnscat2), Slow-drip exfil, C2 over DNS, DoH abuse</td><td><span class="attack-tag tag-exfil">Exfiltration</span></td></tr>
+      <tr><td><strong>Reconnaissance</strong></td><td>Map infrastructure</td><td>Zone Transfers (AXFR), Zone Walking (NSEC), Subdomain Enumeration</td><td><span class="attack-tag tag-recon">Recon</span></td></tr>
+      <tr><td><strong>Evasion</strong></td><td>Hide malicious infra</td><td>Fast Flux DNS, Domain Generation Algorithms (DGA), Dynamic DNS abuse</td><td><span class="attack-tag tag-evasion">Evasion</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>1.1 Key Attack Details</h3>
+  <h4>DNS Cache Poisoning</h4>
+  <p>Injects forged responses into resolver cache → attacker-controlled IPs for legitimate domains. Persists until TTL expiry. Mitigated by source-port randomization, 0x20 case encoding, DNSSEC.</p>
+  <h4>DNS Amplification DDoS</h4>
+  <p>Spoofed-source queries to open resolvers → large responses (ANY, DNSSEC) reflected to victim. <strong>50–70× amplification</strong>. Mitigated by RRL, BCP38, disabling open recursion.</p>
+  <h4>Water Torture / Random Subdomain</h4>
+  <p>Floods authoritative servers with queries for random non-existent subdomains (<code>a8k3m2.example.com</code>). Each forces full lookup + NXDOMAIN. Unique queries defeat caching.</p>
+  <h4>DNS Tunneling</h4>
+  <p>Encodes data in DNS queries/responses (TXT, CNAME, NULL records). Port 53 universally allowed through firewalls → C2, exfiltration, VPN tunnels. Detection: Shannon entropy analysis, query length heuristics, subdomain fan-out tracking.</p>
+  <h4>DNS Hijacking</h4>
+  <p>Control of DNS resolution via compromised registrar/NS config. Targets authoritative side, unlike cache poisoning. Mitigated by registrar locks, DNSSEC, monitoring for unexpected NS changes.</p>
+  <h4>DNS Rebinding</h4>
+  <p>Attacker domain initially resolves to public IP, then after TTL to internal IP (<code>192.168.1.1</code>) → JS accesses internal resources via browser same-origin bypass. Mitigated by blocking public FQDNs resolving to RFC1918.</p>
+  <h4>Fast Flux DNS</h4>
+  <p>Rapid IP rotation with short TTLs. Single-flux: A/AAAA rotation. Double-flux: also rotates NS records. Detected via TTL volatility + ASN diversity analysis.</p>
+  <h4>Domain Generation Algorithms (DGA)</h4>
+  <p>Malware generates pseudo-random domains algorithmically. Only attacker knows active domain. Detected via entropy analysis, consonant ratios, ML classifiers (n-gram models).</p>
+  <div class="callout"><strong>Sources:</strong> FIRST DNS Abuse Techniques Matrix v1.3 · MITRE ATT&CK T1568, T1498/002 · CAPEC-142, CAPEC-275</div>
+</section>
+
+<!-- §2 DETECTION TOOLS -->
+<section id="detection-tools">
+  <h2><span class="num">2.</span> Detection &amp; Monitoring Tools</h2>
+  <p>Tools focused on <strong>observing</strong> DNS traffic, identifying anomalies, and raising alerts in real time.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/kakarot-dev/dnsink">dnsink</a> <span class="lang-badge lang-rust">Rust</span></div>
+      <div class="card-desc">High-performance DNS proxy with threat intelligence feeds, Shannon-entropy tunneling detection, Bloom filter pre-screening, and Prometheus metrics. Two-stage lookup: Bloom miss ~184ns, hit ~491ns.</div>
+      <div class="card-meta"><span>⭐ MIT</span><span>Feeds: URLhaus, OpenPhish, PhishTank</span><span>Hot-reload via ArcSwap</span><span>DoH upstream</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-exfil">Tunneling</span> <span class="attack-tag tag-evasion">DGA/C2</span> <span class="attack-tag tag-intercept">Phishing</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/DrajatAkbarr/go-dns-detector">go-dns-detector</a> <span class="lang-badge lang-go">Go</span></div>
+      <div class="card-desc">Real-time NIDS for DNS tunneling and exfiltration. Deep packet inspection via gopacket, entropy analysis, query length heuristics. Includes red-team attack simulator for validation.</div>
+      <div class="card-meta"><span>⭐ MIT</span><span>Promiscuous-mode capture</span><span>Built-in attack sim</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-exfil">Tunneling</span> <span class="attack-tag tag-exfil">Exfiltration</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/gamelinux/passivedns">PassiveDNS</a> <span class="lang-badge lang-c">C</span></div>
+      <div class="card-desc">Network sniffer logging all DNS server replies for passive DNS collection. Caches/aggregates duplicate answers in-memory. IPv4/IPv6, TCP/UDP. Ideal for incident handling and forensics.</div>
+      <div class="card-meta"><span>Established project</span><span>PCAP + live capture</span><span>NSM / forensics</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-recon">Recon</span> <span class="attack-tag tag-evasion">Fast Flux</span> <span class="attack-tag tag-intercept">Hijacking</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/dmachard/DNS-collector">DNS-collector</a> <span class="lang-badge lang-go">Go</span></div>
+      <div class="card-desc">Captures DNS queries/responses from BIND, PowerDNS, Unbound via DNStap or live capture. Filters noise, enriches with GeoIP/threat intel, outputs to SIEM/Prometheus/Loki/Kafka.</div>
+      <div class="card-meta"><span>Production-ready</span><span>DNStap + sniffer</span><span>Prometheus + Grafana</span><span>GeoIP enrichment</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Role: <span class="attack-tag tag-recon">Telemetry Pipeline</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- §3 PREVENTION TOOLS -->
+<section id="prevention-tools">
+  <h2><span class="num">3.</span> Prevention &amp; Filtering Tools</h2>
+  <p>DNS-layer filtering proxies that block malicious domains proactively.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/slundi/dgaard">Dgaard</a> <span class="lang-badge lang-rust">Rust</span></div>
+      <div class="card-desc">Stratified DNS security proxy for OpenWrt/SME. DGA detection (Shannon entropy + N-Gram), Smart-IDN/homograph protection, DNS exfil &amp; rebinding protection, NXDOMAIN-hunting detection (botnet indicators), GeoIP suspicion scoring. Binary &lt;5MB.</div>
+      <div class="card-meta"><span>⭐ OpenWrt-optimized</span><span>Bloom filter + rkyv zero-copy</span><span>Unix socket telemetry</span><span>TUI dashboard (dgaard-monitor)</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-evasion">DGA</span> <span class="attack-tag tag-exfil">Tunneling</span> <span class="attack-tag tag-intercept">Rebinding</span> <span class="attack-tag tag-volumetric">NXDOMAIN</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://pi-hole.net/">Pi-hole</a> <span class="lang-badge lang-c">Shell/PHP</span></div>
+      <div class="card-desc">Network-wide ad/tracker blocker acting as DNS sinkhole. Huge community, extensive blocklists. Web dashboard for monitoring. Not security-focused by default but widely deployed foundation.</div>
+      <div class="card-meta"><span>⭐ 50k+ GitHub stars</span><span>Massive community</span><span>Easy setup</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Role: <span class="attack-tag tag-intercept">DNS Sinkhole</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://adguard.com/en/adguard-home/overview.html">AdGuard Home</a> <span class="lang-badge lang-go">Go</span></div>
+      <div class="card-desc">DNS sinkhole with DoH/DoT/DoQ support, parental controls, per-client settings. Better security features than Pi-hole (encrypted DNS built-in) but still ad-blocking focused.</div>
+      <div class="card-meta"><span>⭐ 25k+ GitHub stars</span><span>DoH/DoT/DoQ native</span><span>Hot-reload</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Role: <span class="attack-tag tag-intercept">DNS Sinkhole</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/orby-tech/eli-hole">EliHole</a> <span class="lang-badge lang-elixir">Elixir</span></div>
+      <div class="card-desc">Pi-hole analog in Elixir/Phoenix. All transports (UDP/DoT/DoH) share one handler. Full DNSSEC chain-of-trust validation, rate limiting, cluster support, LiveView admin panel, teleporter import/export.</div>
+      <div class="card-meta"><span>Elixir/Phoenix</span><span>DNSSEC validation</span><span>Cluster-aware</span><span>LiveView dashboard</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-intercept">Spoofing (DNSSEC)</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- §4 IDS / NIDS -->
+<section id="ids-nids">
+  <h2><span class="num">4.</span> Network IDS with DNS Capabilities</h2>
+  <p>Full network intrusion detection systems that include robust DNS protocol analysis.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://suricata.io/">Suricata</a> <span class="lang-badge lang-c">C</span></div>
+      <div class="card-desc">High-performance NIDS/NIPS/NSM engine. Extensive DNS keyword support: <code>dns.query</code>, <code>dns.answers.rrname</code>, <code>dns.response</code>, <code>dns.opcode</code>. Supports multi-buffer matching on all DNS sections. Signature-based + protocol anomaly detection.</div>
+      <div class="card-meta"><span>OISF / Foundation-backed</span><span>Multi-threaded</span><span>EVE JSON logging</span><span>Lua scripting</span></div>
+      <ul style="font-size:.85rem;margin-top:.5rem;">
+        <li>Sticky buffers for query names, answer names, authority, additional sections</li>
+        <li>Can match on DNS response codes, opcodes, and flags</li>
+        <li>Integrates with ELK, Splunk, Wazuh for alerting</li>
+        <li>Community + ET Pro rulesets include DNS-specific signatures</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://zeek.org/">Zeek (formerly Bro)</a> <span class="lang-badge lang-cpp">C++</span></div>
+      <div class="card-desc">Network analysis framework with deep DNS protocol parsing. Generates structured <code>dns.log</code> with query/response correlation, EDNS, DNSSEC fields. Scriptable policy engine for custom detectors.</div>
+      <div class="card-meta"><span>NSF-funded</span><span>Scripting language</span><span>Cluster mode</span><span>Intel framework</span></div>
+      <ul style="font-size:.85rem;margin-top:.5rem;">
+        <li>Events: <code>dns_request</code>, <code>dns_message</code>, <code>dns_query_reply</code>, <code>dns_AAAA_reply</code>, etc.</li>
+        <li>Built-in correlation of queries with responses via transaction ID</li>
+        <li>Intel framework for IOC matching against DNS queries</li>
+        <li>Packages: dns-tunneling, domain-dga, dns-axfr detection</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout green"><strong>Key insight:</strong> Suricata excels at signature-based inline blocking; Zeek excels at structured logging, correlation, and custom scripted analysis. Many production deployments run <strong>both</strong> side by side — Suricata for real-time blocking, Zeek for deep forensics and anomaly hunting.</div>
+</section>
+
+<!-- §5 ML TOOLS -->
+<section id="ml-tools">
+  <h2><span class="num">5.</span> ML / AI-Enhanced Tools</h2>
+  <p>Tools applying machine learning for DGA detection, anomaly scoring, and threat classification.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/punitmishra/shield-ai">Shield AI</a> <span class="lang-badge lang-rust">Rust</span> <span class="lang-badge lang-ts">TS</span></div>
+      <div class="card-desc">AI-powered DNS filtering: DGA detection via ML, multi-factor threat scoring (entropy, TLD, subdomains), privacy scoring, anomaly detection for tunneling/exfil. ~15MB RAM, &lt;1ms latency. WebSocket live dashboard.</div>
+      <div class="card-meta"><span>⭐ MIT</span><span>Hickory DNS + DNSSEC</span><span>50k LRU cache</span><span>Rate limiting</span><span>PWA dashboard</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-evasion">DGA</span> <span class="attack-tag tag-exfil">Tunneling</span> <span class="attack-tag tag-intercept">Phishing</span></p>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/arifsafa/dns-purple-lab">dnsxray</a> <span class="lang-badge lang-python">Python</span></div>
+      <div class="card-desc">DNS threat detection &amp; purple team toolkit. XGBoost + Isolation Forest + RL feature weighting. 16 ML features per query. Detects exfiltration, DGA, DoH/DoQ C2 beaconing, Fast Flux. GeoIP + CTI enrichment (Abuse.ch, Feodo Tracker). Docker + ELK stack.</div>
+      <div class="card-meta"><span>⭐ MIT</span><span>Zeek/PCAP/live input</span><span>Sigma rules included</span><span>Attack simulator</span></div>
+      <p style="margin-top:.5rem;font-size:.85rem;">Detects: <span class="attack-tag tag-exfil">Exfiltration</span> <span class="attack-tag tag-evasion">DGA</span> <span class="attack-tag tag-evasion">Fast Flux</span> <span class="attack-tag tag-evasion">C2 Beaconing</span></p>
+      <h4 style="margin-top:.75rem;">ML Pipeline Detail</h4>
+      <ol style="font-size:.85rem;">
+        <li><strong>Feature Extraction</strong> — 16 features per DNS query (entropy, length, consonant ratio, n-gram scores, etc.)</li>
+        <li><strong>XGBoost Classifier</strong> — Supervised model, probability 0–1, threshold &gt;0.55 triggers alert</li>
+        <li><strong>Isolation Forest</strong> — Unsupervised outlier detection for novel attack patterns</li>
+        <li><strong>RL Feature Weighting</strong> — False positive feedback loop reduces noisy feature weights</li>
+        <li><strong>GeoIP Enrichment</strong> — High-risk country +20, residential ASN +15, Tor exit +25 to score</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- §6 HONEYPOTS -->
+<section id="honeypots">
+  <h2><span class="num">6.</span> DNS Honeypots &amp; Sinkholes</h2>
+  <p>Deception-based tools that attract and log malicious DNS activity for intelligence gathering.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/jekil/UDPot">UDPot</a> <span class="lang-badge lang-python">Python</span></div>
+      <div class="card-desc">DNS honeypot with configurable interactivity. Resolves a limited number of queries per source IP to appear as an open resolver, then sinkholing all further requests. Logs to SQLite + JSONL with rotation.</div>
+      <div class="card-meta"><span>Twisted framework</span><span>Docker image available</span><span>UDP + TCP</span><span>Configurable thresholds</span></div>
+      <ul style="font-size:.85rem;margin-top:.5rem;">
+        <li>Default: 3 real resolutions per source IP, then sinkhole for 24h</li>
+        <li>Logs: transport protocol, source IP/port, query name/type/class, timestamp</li>
+        <li>JSONL output processable with <code>jq</code> for analysis</li>
+        <li>Use case: detect reconnaissance, amplification abuse attempts, scanner enumeration</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/bastian-red/dns-sinkhole">dns-sinkhole</a> <span class="lang-badge lang-python">Python</span></div>
+      <div class="card-desc">Educational Pi-hole-style sinkhole with built-in offensive DNS lab. Includes DNS tunneling/exfiltration detector (entropy + fan-out + payload-type analysis), cache poisoning race demo, and Flask + Socket.IO live dashboard.</div>
+      <div class="card-meta"><span>Educational / Lab</span><span>asyncio UDP+TCP</span><span>SQLite logging</span><span>DoH upstream</span></div>
+      <ul style="font-size:.85rem;margin-top:.5rem;">
+        <li>Exfil detector: encoded-label entropy, subdomain fan-out, payload-qtype floods</li>
+        <li>Offensive lab: tunneling client + cache poisoning demo (loopback-only safety guard)</li>
+        <li>Documents defenses: source-port randomization, 0x20 encoding, DNSSEC</li>
+        <li>Great for <strong>training and validating</strong> detection logic before production</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- §7 LOGGING & TELEMETRY -->
+<section id="logging-telemetry">
+  <h2><span class="num">7.</span> DNS Logging &amp; Telemetry Pipelines</h2>
+  <p>Infrastructure for capturing, enriching, and routing DNS data to analytics/SIEM platforms.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/dmachard/DNS-collector">DNS-collector</a> <span class="lang-badge lang-go">Go</span></div>
+      <div class="card-desc">The missing piece between DNS servers and your data stack. Captures via DNStap protocol or live network sniffing, filters noise upstream, enriches with GeoIP/threat intel, outputs to 15+ destinations.</div>
+      <div class="card-meta"><span>Production-ready</span><span>BIND/PowerDNS/Unbound/CoreDNS</span><span>TLS DNStap</span></div>
+      <h4>Supported Outputs</h4>
+      <ul style="font-size:.85rem;">
+        <li><strong>Monitoring:</strong> Prometheus, Grafana Loki</li>
+        <li><strong>SIEM:</strong> Syslog, Kafka, Fluentd</li>
+        <li><strong>Storage:</strong> Files (text, JSON, PCAP), databases</li>
+        <li><strong>Formats:</strong> Text, JSON, PCAP, Jinja2 templates</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://zeek.org/">Zeek dns.log</a> <span class="lang-badge lang-cpp">C++</span></div>
+      <div class="card-desc">Zeek's DNS analyzer produces structured logs with full query/response correlation, RTT measurement, EDNS fields, and DNSSEC metadata. Foundation for downstream analytics.</div>
+      <div class="card-meta"><span>Structured TSV/JSON</span><span>Query-response pairing</span><span>Multicast-aware</span></div>
+      <h4>Log Fields</h4>
+      <ul style="font-size:.85rem;">
+        <li>Transaction ID, query name, type, class, response code</li>
+        <li>AA, RD, RA, TC flags; RTT; answers array</li>
+        <li>EDNS version, DO bit, DNSSEC status</li>
+        <li>Feeds directly into ELK / Splunk / SIEM via Filebeat</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">DNStap Protocol</div>
+      <div class="card-desc">Lightweight binary logging protocol (Protocol Buffers) supported by BIND 9.11+, Unbound, PowerDNS, CoreDNS, Knot. Streams DNS messages from server to collector with minimal overhead.</div>
+      <div class="card-meta"><span>Standard protocol</span><span>Protobuf framing</span><span>Unix socket or TCP</span></div>
+      <ul style="font-size:.85rem;margin-top:.5rem;">
+        <li>Full DNS wire-format message + metadata (timestamp, source, transport)</li>
+        <li>Much lower overhead than packet capture (no promiscuous mode needed)</li>
+        <li>Pairs perfectly with DNS-collector or custom consumers</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>7.1 Recommended Telemetry Stack</h3>
+  <pre><code>DNS Server (BIND/Unbound/PowerDNS)
+    │ DNStap (protobuf over Unix socket)
+    ▼
+DNS-collector (Go)
+    │ filter → enrich (GeoIP, threat intel) → transform
+    ├──▶ Prometheus  →  Grafana (dashboards, alerts)
+    ├──▶ Loki        →  Grafana (log search)
+    ├──▶ Kafka       →  SIEM / custom ML pipeline
+    └──▶ Syslog      →  Splunk / Wazuh</code></pre>
+</section>
+
+<!-- §8 RATE LIMITING -->
+<section id="rate-limiting">
+  <h2><span class="num">8.</span> Rate Limiting &amp; DDoS Mitigation</h2>
+  <p>Tools and techniques specifically targeting volumetric DNS attacks.</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><a href="https://www.dnsdist.net/">dnsdist</a> <span class="lang-badge lang-cpp">C++</span> <span class="lang-badge lang-lua">Lua</span></div>
+      <div class="card-desc">DNS-aware load balancer and DDoS shield by PowerDNS. Lua-scriptable policy engine for real-time traffic shaping. DoH/DoT/DoQ/DoH3 termination. Per-IP QPS limiting, regex rules, TC-forcing for UDP floods.</div>
+      <div class="card-meta"><span>PowerDNS project</span><span>Hundreds of millions of users</span><span>Prometheus + Carbon metrics</span></div>
+      <h4>Key DDoS Capabilities</h4>
+      <ul style="font-size:.85rem;">
+        <li><code>MaxQPSIPRule(N)</code> — per-IP/subnet rate limiting with configurable action (drop, delay, TC=1)</li>
+        <li><code>MaxQPSRule(N)</code> — global QPS ceiling</li>
+        <li><code>RegexRule()</code> — pattern-based blocking (e.g., random subdomain patterns)</li>
+        <li><code>QNameSuffixRule()</code> — efficient domain list matching</li>
+        <li>TC=1 forcing sends UDP clients to TCP (raises attacker cost)</li>
+        <li>Dynamic rule management via runtime console</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title"><a href="https://github.com/alam0rt/rrl">CoreDNS RRL Plugin</a> <span class="lang-badge lang-go">Go</span></div>
+      <div class="card-desc">BIND-like Response Rate Limiting for CoreDNS. Token-bucket accounting per response category (positive, NODATA, NXDOMAIN, referrals, errors). Slip-ratio for legitimate fallback. Wildcard flooding protection via metadata plugin.</div>
+      <div class="card-meta"><span>CoreDNS plugin</span><span>BIND9-compatible behavior</span><span>Report-only mode</span></div>
+      <h4>Configuration Options</h4>
+      <ul style="font-size:.85rem;">
+        <li><code>responses-per-second</code> — positive response allowance</li>
+        <li><code>nxdomains-per-second</code> — NXDOMAIN response allowance</li>
+        <li><code>errors-per-second</code> — error response allowance</li>
+        <li><code>slip-ratio N</code> — let every Nth rate-limited response through (TC=1) for legitimate client recovery</li>
+        <li><code>report-only</code> — log without enforcing, for tuning</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">BIND 9 RRL (built-in)</div>
+      <div class="card-desc">Native Response Rate Limiting in BIND 9.10+. Credit/token-bucket scheme per response category + client prefix. Configurable in <code>named.conf</code> options or view blocks. Large authoritative operators report huge traffic reductions.</div>
+      <div class="card-meta"><span>Built into BIND</span><span>ISC maintained</span><span>log-only mode for tuning</span></div>
+      <ul style="font-size:.85rem;margin-top:.5rem;">
+        <li>15-second rolling window (configurable 1–3600s)</li>
+        <li>Per-category: <code>responses-per-second</code>, <code>nxdomains-per-second</code>, <code>errors-per-second</code>, <code>all-per-second</code></li>
+        <li><code>qps-scale</code> — dynamic scaling based on total query rate</li>
+        <li>Recommended for authoritative servers (higher false-positive risk on recursive)</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout warn"><strong>Note:</strong> RRL is designed for <em>authoritative</em> servers to prevent amplification abuse. For <em>recursive</em> resolvers, access control (ACLs) + dnsdist as a front-end proxy is the preferred mitigation approach.</div>
+</section>
+
+<!-- §9 COMPARISON -->
+<section id="comparison">
+  <h2><span class="num">9.</span> Head-to-Head Feature Comparison</h2>
+  <div class="table-wrap"><table>
+    <thead><tr>
+      <th>Tool</th><th>Language</th><th>Tunneling Detection</th><th>DGA Detection</th><th>Threat Intel Feeds</th><th>Rate Limiting</th><th>DNSSEC</th><th>Dashboard</th><th>Prometheus</th><th>Best For</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><strong>dnsink</strong></td><td>Rust</td><td>Shannon entropy</td><td>Via feeds</td><td>URLhaus, OpenPhish, PhishTank</td><td>—</td><td>—</td><td>Terminal</td><td>Yes</td><td>Inline blocking proxy</td></tr>
+      <tr><td><strong>Dgaard</strong></td><td>Rust</td><td>Entropy + volume</td><td>Shannon + N-Gram</td><td>Custom lists</td><td>—</td><td>—</td><td>TUI (dgaard-monitor)</td><td>—</td><td>Edge/router filtering</td></tr>
+      <tr><td><strong>Shield AI</strong></td><td>Rust/TS</td><td>Anomaly detection</td><td>ML model</td><td>Blocklists (7 categories)</td><td>Per-IP</td><td>Hickory DNS</td><td>WebSocket live</td><td>—</td><td>AI-powered DNS filter</td></tr>
+      <tr><td><strong>dnsxray</strong></td><td>Python</td><td>XGBoost + IF</td><td>XGBoost + IF</td><td>Abuse.ch, Feodo Tracker</td><td>—</td><td>—</td><td>CLI + ELK</td><td>—</td><td>Purple team / ML research</td></tr>
+      <tr><td><strong>go-dns-detector</strong></td><td>Go</td><td>DPI + entropy</td><td>—</td><td>—</td><td>—</td><td>—</td><td>CLI</td><td>—</td><td>Lightweight NIDS</td></tr>
+      <tr><td><strong>Suricata</strong></td><td>C</td><td>Via rules</td><td>Via rules</td><td>ET Pro / community</td><td>—</td><td>—</td><td>Via ELK/Kibana</td><td>Yes</td><td>Full NIDS/NIPS inline</td></tr>
+      <tr><td><strong>Zeek</strong></td><td>C++</td><td>Package available</td><td>Package available</td><td>Intel framework</td><td>—</td><td>Logged</td><td>Via ELK/Kibana</td><td>—</td><td>Deep forensics + scripting</td></tr>
+      <tr><td><strong>dnsdist</strong></td><td>C++/Lua</td><td>Via Lua scripts</td><td>Via Lua scripts</td><td>—</td><td>Per-IP + global QPS</td><td>—</td><td>Web API</td><td>Yes</td><td>DDoS mitigation LB</td></tr>
+      <tr><td><strong>DNS-collector</strong></td><td>Go</td><td>—</td><td>—</td><td>GeoIP enrichment</td><td>—</td><td>—</td><td>—</td><td>Yes</td><td>Telemetry pipeline</td></tr>
+      <tr><td><strong>Pi-hole</strong></td><td>Shell/PHP</td><td>—</td><td>—</td><td>Community blocklists</td><td>—</td><td>—</td><td>Web UI</td><td>—</td><td>Ad/tracker sinkhole</td></tr>
+      <tr><td><strong>AdGuard Home</strong></td><td>Go</td><td>—</td><td>—</td><td>Built-in lists</td><td>—</td><td>DoH/DoT</td><td>Web UI</td><td>—</td><td>Encrypted DNS sinkhole</td></tr>
+      <tr><td><strong>UDPot</strong></td><td>Python</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Honeypot / intel</td></tr>
+      <tr><td><strong>PassiveDNS</strong></td><td>C</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Forensic passive collection</td></tr>
+      <tr><td><strong>BIND 9 RRL</strong></td><td>C</td><td>—</td><td>—</td><td>—</td><td>Token-bucket per category</td><td>Full</td><td>—</td><td>—</td><td>Auth server amplification defense</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- §10 ARCHITECTURE -->
+<section id="architecture">
+  <h2><span class="num">10.</span> Proposed Architecture for DNS Attack Defender</h2>
+  <p>Based on the research above, here is a layered architecture combining the best open-source components into a unified DNS defense platform.</p>
+
+  <h3>10.1 High-Level Architecture</h3>
+  <pre><code>                        ┌─────────────────────────────┐
+                        │     ALERTING &amp; RESPONSE      │
+                        │  Grafana Alerts / PagerDuty  │
+                        │  Webhook → Slack / Email     │
+                        └──────────────┬──────────────┘
+                                       │
+         ┌─────────────────────────────┼─────────────────────────────┐
+         │              ANALYTICS &amp; VISUALIZATION                   │
+         │  Grafana Dashboards  │  Kibana  │  Custom Web UI          │
+         └─────────┬───────────┴────┬─────┴────────┬────────────────┘
+                   │                │              │
+         ┌─────────▼──┐    ┌───────▼───┐   ┌──────▼──────┐
+         │ Prometheus  │    │   Loki    │   │ Elasticsearch│
+         └─────────┬──┘    └───────┬───┘   └──────┬──────┘
+                   │                │              │
+         ┌─────────▼────────────────▼──────────────▼──────┐
+         │            DNS-collector (Go)                    │
+         │   DNStap intake → Filter → Enrich → Route       │
+         └────────────────────────┬────────────────────────┘
+                                  │ DNStap
+         ┌────────────────────────▼────────────────────────┐
+         │              DNS RESOLUTION LAYER                │
+         │                                                  │
+         │  ┌──────────┐   ┌───────────┐   ┌────────────┐ │
+         │  │ dnsdist   │──▶│ Unbound / │──▶│ Upstream   │ │
+         │  │ (DDoS     │   │ BIND      │   │ Forwarder  │ │
+         │  │  shield)  │   │ (resolver)│   │ (DoH)      │ │
+         │  └──────────┘   └───────────┘   └────────────┘ │
+         └────────────────────────┬────────────────────────┘
+                                  │ mirror / tap
+         ┌────────────────────────▼────────────────────────┐
+         │           DETECTION &amp; ANALYSIS LAYER            │
+         │                                                  │
+         │  ┌──────────┐  ┌──────────┐  ┌───────────────┐ │
+         │  │ Suricata  │  │  Zeek    │  │ ML Engine     │ │
+         │  │ (IDS/IPS) │  │ (NSM)   │  │ (dnsxray /    │ │
+         │  │ inline    │  │ passive  │  │  custom)      │ │
+         │  └──────────┘  └──────────┘  └───────────────┘ │
+         └────────────────────────┬────────────────────────┘
+                                  │
+         ┌────────────────────────▼────────────────────────┐
+         │           THREAT INTELLIGENCE LAYER              │
+         │                                                  │
+         │  URLhaus · OpenPhish · PhishTank · Abuse.ch      │
+         │  Feodo Tracker · OISD · Custom IOC feeds         │
+         │  MaxMind GeoIP · Tor exit node lists             │
+         └─────────────────────────────────────────────────┘</code></pre>
+
+  <h3>10.2 Detection Coverage by Attack Type</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Attack Type</th><th>Detection Layer</th><th>Tool(s)</th><th>Technique</th></tr></thead>
+    <tbody>
+      <tr><td>DNS Tunneling / Exfil</td><td>Detection</td><td>Zeek, dnsink, Dgaard, ML engine</td><td>Shannon entropy, query length, subdomain fan-out, n-gram</td></tr>
+      <tr><td>DGA Domains</td><td>Detection + ML</td><td>Dgaard, Shield AI, dnsxray</td><td>Entropy + n-gram models, XGBoost classifier</td></tr>
+      <tr><td>Amplification DDoS</td><td>Resolution</td><td>dnsdist, BIND RRL</td><td>Response rate limiting, TC forcing, per-IP QPS</td></tr>
+      <tr><td>Water Torture</td><td>Resolution</td><td>dnsdist, Suricata rules</td><td>NXDOMAIN rate tracking, random subdomain pattern detection</td></tr>
+      <tr><td>Cache Poisoning</td><td>Resolution</td><td>DNSSEC (Unbound/BIND), EliHole</td><td>Cryptographic validation, source-port randomization, 0x20</td></tr>
+      <tr><td>DNS Hijacking</td><td>Monitoring</td><td>PassiveDNS, Zeek, custom scripts</td><td>NS record change monitoring, WHOIS correlation</td></tr>
+      <tr><td>DNS Rebinding</td><td>Resolution</td><td>Dgaard, custom resolver policy</td><td>Block public FQDNs resolving to RFC1918 addresses</td></tr>
+      <tr><td>Fast Flux</td><td>Detection + ML</td><td>dnsxray, PassiveDNS</td><td>TTL volatility + ASN diversity + IP rotation frequency</td></tr>
+      <tr><td>C2 Beaconing</td><td>Detection + ML</td><td>dnsxray, Suricata, Zeek</td><td>Periodicity analysis, payload uniformity, QUIC fingerprinting</td></tr>
+      <tr><td>Zone Transfer</td><td>Resolution + IDS</td><td>BIND ACLs, Suricata, Zeek</td><td>AXFR request blocking/alerting</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>10.3 Real-Time Alerting Pipeline</h3>
+  <p>For the "alert in real time" requirement, the recommended pipeline is:</p>
+  <ol>
+    <li><strong>dnsdist</strong> handles wire-speed rate limiting and drops obvious volumetric attacks inline</li>
+    <li><strong>DNS-collector</strong> streams enriched DNS events to Prometheus (metrics) and Loki (logs)</li>
+    <li><strong>Grafana</strong> evaluates alert rules on Prometheus metrics (QPS spikes, NXDOMAIN ratios, entropy anomalies)</li>
+    <li><strong>Suricata</strong> generates EVE JSON alerts for signature matches → forwarded to SIEM</li>
+    <li><strong>ML Engine</strong> (dnsxray or custom) processes Zeek logs / Kafka stream for behavioral anomalies</li>
+    <li><strong>Alert routing:</strong> Grafana → PagerDuty / Slack / Email / Webhook for human response</li>
+  </ol>
+</section>
+
+<!-- §10.4 BLOCKING COVERAGE -->
+<section id="blocking-coverage">
+  <h2><span class="num">10.4</span> Blocking Coverage Matrix</h2>
+  <p>Of the 12 DNS attack types identified, how many can actually be <strong>blocked inline</strong> (not just detected/alerted)?</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Attack Type</th><th>Blockable?</th><th>Mechanism</th><th>Tool(s)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>DNS Amplification DDoS</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Rate-limit + drop excessive responses</td><td>dnsdist, BIND RRL, CoreDNS RRL</td></tr>
+      <tr><td>2</td><td>Water Torture / NXDOMAIN Flood</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Per-IP QPS limits, NXDOMAIN rate caps</td><td>dnsdist, BIND RRL</td></tr>
+      <tr><td>3</td><td>DNS Cache Poisoning</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Cryptographic validation rejects forged responses</td><td>DNSSEC (Unbound/BIND), EliHole</td></tr>
+      <tr><td>4</td><td>DNS Tunneling / Exfiltration</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Entropy scoring → drop flagged queries inline</td><td>dnsink, Dgaard, Suricata IPS, dnsdist (Lua)</td></tr>
+      <tr><td>5</td><td>DGA Domains</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Entropy + n-gram scoring → block at resolution</td><td>Dgaard, Shield AI, dnsink (via feeds)</td></tr>
+      <tr><td>6</td><td>DNS Rebinding</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Block public FQDNs resolving to RFC1918</td><td>Dgaard, custom resolver policy</td></tr>
+      <tr><td>7</td><td>Zone Transfer (AXFR)</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>ACLs deny unauthorized AXFR requests</td><td>BIND ACLs, Suricata IPS</td></tr>
+      <tr><td>8</td><td>C2 Beaconing</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Block known C2 domains via threat feeds</td><td>dnsink, Dgaard, Suricata IPS</td></tr>
+      <tr><td>9</td><td>On-Path DNS (MITM)</td><td style="color:#3fb950;font-weight:700;">Yes</td><td>Encrypted transport prevents interception</td><td>DoH/DoT (Unbound, dnsdist)</td></tr>
+      <tr><td>10</td><td>Fast Flux</td><td style="color:#d29922;font-weight:700;">Partial</td><td>Block known domains, but technique requires ML detection → feedback to blocklist</td><td>dnsxray → feed to dnsink/Dgaard</td></tr>
+      <tr><td>11</td><td>DNS Hijacking</td><td style="color:#d29922;font-weight:700;">Partial</td><td>DNSSEC rejects hijacked responses at resolver, but can't prevent registrar compromise</td><td>DNSSEC + PassiveDNS monitoring</td></tr>
+      <tr><td>12</td><td>Subdomain Takeover</td><td style="color:#f85149;font-weight:700;">No</td><td>Not DNS-layer — requires orphaned CNAME cleanup at zone level</td><td>Detection only (Zeek, custom scripts)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="verdict">
+    <h3>Verdict: 9 of 12 Fully Blockable</h3>
+    <ul>
+      <li><strong style="color:#3fb950;">9 fully blockable</strong> inline with open-source tools (dnsdist + Unbound/DNSSEC + dnsink/Dgaard + Suricata IPS)</li>
+      <li><strong style="color:#d29922;">2 partially blockable</strong> — fast flux and hijacking require ML detection feedback loops or are limited to resolver-side validation</li>
+      <li><strong style="color:#f85149;">1 not blockable at DNS layer</strong> — subdomain takeover requires zone management remediation</li>
+    </ul>
+  </div>
+</section>
+
+<!-- §11 RECOMMENDATIONS -->
+<section id="recommendations">
+  <h2><span class="num">11.</span> Recommendations &amp; Next Steps</h2>
+
+  <div class="verdict">
+    <h3>Top Picks by Use Case</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>If you need...</th><th>Start with</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Fastest path to DNS threat blocking</td><td><strong>dnsink</strong></td><td>Single binary, threat feeds built-in, Prometheus metrics, ~500ns lookups</td></tr>
+        <tr><td>Edge/router-grade filtering</td><td><strong>Dgaard</strong></td><td>&lt;5MB binary, DGA + tunneling + rebinding detection, OpenWrt-ready</td></tr>
+        <tr><td>ML-powered detection research</td><td><strong>dnsxray</strong></td><td>XGBoost + Isolation Forest, attack simulator, Sigma rules, ELK-ready</td></tr>
+        <tr><td>Full network IDS with DNS</td><td><strong>Suricata + Zeek</strong></td><td>Industry standard, massive rule ecosystem, deep protocol analysis</td></tr>
+        <tr><td>DDoS protection for DNS infra</td><td><strong>dnsdist</strong></td><td>Battle-tested at scale, Lua-scriptable, per-IP rate limiting</td></tr>
+        <tr><td>DNS telemetry pipeline</td><td><strong>DNS-collector + Grafana</strong></td><td>DNStap native, 15+ output targets, production-proven</td></tr>
+        <tr><td>Honeypot / threat intel</td><td><strong>UDPot</strong></td><td>Simple, Docker-ready, configurable interactivity, SQLite + JSONL</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <h3>11.1 Recommended MVP Stack</h3>
+  <p>For a minimum viable DNS Attack Defender deployment:</p>
+  <ol>
+    <li><strong>dnsdist</strong> — front-end load balancer with rate limiting (stops volumetric attacks)</li>
+    <li><strong>Unbound</strong> — validating recursive resolver with DNSSEC (stops cache poisoning)</li>
+    <li><strong>dnsink or Dgaard</strong> — threat-intel-driven blocking + tunneling detection</li>
+    <li><strong>DNS-collector</strong> — DNStap telemetry to Prometheus + Loki</li>
+    <li><strong>Grafana</strong> — dashboards + real-time alerting (Slack/email/PagerDuty)</li>
+  </ol>
+
+  <h3>11.2 Advanced Add-ons</h3>
+  <ul>
+    <li><strong>Zeek</strong> — deep DNS protocol logging + custom detection scripts</li>
+    <li><strong>Suricata</strong> — inline IPS with ET Pro rulesets for known attack signatures</li>
+    <li><strong>dnsxray / custom ML</strong> — behavioral anomaly detection for DGA, fast flux, C2</li>
+    <li><strong>UDPot</strong> — honeypot on unused IPs for early warning intelligence</li>
+    <li><strong>PassiveDNS</strong> — historical DNS record database for forensic investigations</li>
+  </ul>
+
+  <h3>11.3 Key Design Principles</h3>
+  <ul>
+    <li><strong>Defense in depth:</strong> No single tool covers all attack types — layer multiple tools</li>
+    <li><strong>Inline + passive:</strong> Rate limiting and blocking inline; deep analysis on mirrored traffic</li>
+    <li><strong>Threat intel freshness:</strong> Auto-refresh feeds hourly minimum (URLhaus, PhishTank, Abuse.ch)</li>
+    <li><strong>False positive management:</strong> Start in report-only / log-only mode, tune thresholds, then enforce</li>
+    <li><strong>Encrypted DNS:</strong> Use DoH/DoT upstream to prevent on-path manipulation of resolver queries</li>
+    <li><strong>DNSSEC everywhere:</strong> Validate on resolvers to prevent cache poisoning at the crypto layer</li>
+    <li><strong>Observability first:</strong> You can't defend what you can't see — comprehensive DNS logging is foundational</li>
+  </ul>
+
+  <h3>11.4 Next Steps for This Project</h3>
+  <ol>
+    <li>Choose target deployment environment (home lab, SME, enterprise, ISP)</li>
+    <li>Deploy MVP stack (dnsdist + Unbound + dnsink + DNS-collector + Grafana)</li>
+    <li>Integrate threat intelligence feeds and tune detection thresholds</li>
+    <li>Add ML detection layer (dnsxray or custom model trained on local traffic)</li>
+    <li>Build custom alerting rules in Grafana tied to Slack / PagerDuty</li>
+    <li>Deploy honeypot (UDPot) on unused network addresses for early warning</li>
+    <li>Establish baseline metrics and iteratively reduce false positives</li>
+  </ol>
+</section>
+
+</div>
+<footer>
+  <p>DNS Attack Defender Research Document — Generated August 2026</p>
+  <p>Sources: GitHub repositories, Suricata docs, Zeek docs, PowerDNS/dnsdist docs, ISC BIND docs, FIRST DNS Abuse Matrix, MITRE ATT&CK</p>
+</footer>
+</body>
+</html>

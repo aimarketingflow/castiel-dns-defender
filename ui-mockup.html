@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DNS Attack Defender — UI Mockup</title>
+<style>
+:root {
+  --bg: #1e1e1e;
+  --sidebar-bg: #2a2a2a;
+  --sidebar-item: #e0e0e0;
+  --sidebar-item-active: #0a84ff;
+  --card-bg: #2c2c2c;
+  --card-border: #3a3a3a;
+  --text: #e8e8e8;
+  --text-secondary: #999;
+  --green: #30d158;
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --yellow: #ffd60a;
+  --blue: #0a84ff;
+  --purple: #bf5af2;
+  --radius: 10px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #3a3a3a;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 20px 16px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-items {
+  flex: 1;
+  padding: 0 8px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sidebar-item);
+  transition: background 0.15s, color 0.15s;
+  margin-bottom: 2px;
+}
+
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.sidebar-item.active {
+  background: var(--sidebar-item-active);
+  color: white;
+}
+
+.sidebar-item .icon {
+  width: 20px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.sidebar-item.doh-disabled .icon { color: var(--red); }
+.sidebar-item.active .icon { color: white; }
+
+/* STATUS BAR */
+.status-bar {
+  padding: 10px 16px;
+  border-top: 1px solid #3a3a3a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.stopped { background: #666; }
+.status-dot.starting { background: var(--yellow); animation: pulse 1s infinite; }
+.status-dot.error { background: var(--red); }
+
+@keyframes pulse { 50% { opacity: 0.4; } }
+
+.status-text { color: var(--text-secondary); font-weight: 600; }
+.status-pid { color: #666; margin-left: auto; font-family: var(--mono); font-size: 11px; }
+
+.status-btn {
+  background: none; border: none; color: var(--text-secondary);
+  cursor: pointer; padding: 4px; border-radius: 4px;
+  font-size: 14px; transition: all 0.15s;
+}
+.status-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+.status-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* MAIN CONTENT */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.main-header {
+  padding: 16px 24px;
+  font-size: 20px;
+  font-weight: 700;
+  border-bottom: 1px solid #3a3a3a;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+.view { display: none; padding: 24px; }
+.view.active { display: block; }
+
+/* DASHBOARD */
+.status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(48,209,88,0.12), transparent);
+  margin-bottom: 20px;
+}
+
+.status-banner.stopped { background: linear-gradient(135deg, rgba(102,102,102,0.12), transparent); }
+
+.status-banner-text h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.status-banner-text p { font-size: 13px; color: var(--text-secondary); }
+
+.status-banner-icon { font-size: 48px; }
+.status-banner-icon.running { color: var(--green); }
+.status-banner-icon.stopped { color: #666; }
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.metric-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.metric-card-icon { font-size: 18px; }
+.metric-card-value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric-card-title { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+/* CHART */
+.chart-container {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.chart-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+
+.chart {
+  height: 160px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding-bottom: 20px;
+}
+
+.chart-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.chart-bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* BREAKDOWN */
+.breakdown {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.breakdown-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.breakdown-bar-bg {
+  flex: 1;
+  height: 6px;
+  background: #3a3a3a;
+  border-radius: 3px;
+  margin: 0 12px;
+  overflow: hidden;
+}
+
+.breakdown-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s;
+}
+
+.last-updated { font-size: 11px; color: var(--text-secondary); text-align: center; }
+
+/* DOH CONTROL */
+.doh-hero {
+  text-align: center;
+  padding: 40px 28px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(48,209,88,0.1), transparent);
+  margin-bottom: 24px;
+}
+
+.doh-hero.disabled { background: linear-gradient(180deg, rgba(255,69,58,0.1), transparent); }
+
+.doh-hero-icon { font-size: 64px; margin-bottom: 16px; }
+.doh-hero-icon.enabled { color: var(--green); }
+.doh-hero-icon.disabled { color: var(--red); }
+
+.doh-hero-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+.doh-hero-subtitle { font-size: 14px; color: var(--text-secondary); }
+
+.doh-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.doh-action-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.doh-action-btn:hover { border-color: #555; background: #333; }
+.doh-action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.doh-action-icon { font-size: 24px; margin-bottom: 8px; }
+.doh-action-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.doh-action-desc { font-size: 11px; color: var(--text-secondary); }
+
+.section-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+
+.kill-switch-list {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  margin-bottom: 24px;
+}
+
+.kill-switch-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.kill-switch-row:last-child { border-bottom: none; }
+
+.kill-switch-cmd { font-family: var(--mono); font-size: 12px; color: var(--blue); width: 280px; }
+.kill-switch-desc { font-size: 11px; color: var(--text-secondary); flex: 1; }
+.kill-switch-run {
+  background: #3a3a3a; border: 1px solid #555; color: var(--text);
+  padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;
+}
+.kill-switch-run:hover { background: #4a4a4a; }
+
+.signal-table {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  margin-bottom: 24px;
+}
+
+.signal-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #3a3a3a;
+  font-size: 12px;
+}
+
+.signal-row:last-child { border-bottom: none; }
+
+.signal-name { font-family: var(--mono); font-weight: 700; color: var(--purple); width: 80px; }
+.signal-desc { width: 200px; }
+.signal-cmd { font-family: var(--mono); font-size: 11px; color: var(--text-secondary); margin-left: auto; }
+
+.safety-info {
+  background: rgba(255,214,10,0.05);
+  border: 1px solid rgba(255,214,10,0.15);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.safety-info h3 { font-size: 14px; margin-bottom: 8px; }
+
+/* ALERTS */
+.alert-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+}
+
+.alert-count { font-size: 12px; color: var(--text-secondary); }
+
+.filter-group {
+  display: flex;
+  gap: 2px;
+  background: var(--card-bg);
+  border-radius: 6px;
+  padding: 2px;
+  margin-left: auto;
+}
+
+.filter-btn {
+  background: none; border: none; color: var(--text-secondary);
+  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; font-weight: 500;
+}
+.filter-btn.active { background: var(--blue); color: white; }
+.filter-btn:hover:not(.active) { color: var(--text); }
+
+.alert-list { display: flex; flex-direction: column; gap: 4px; }
+
+.alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+.alert-icon.critical { color: var(--red); }
+.alert-icon.warn { color: var(--orange); }
+.alert-icon.info { color: var(--blue); }
+
+.alert-content { flex: 1; }
+
+.alert-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.alert-type {
+  font-size: 11px; font-weight: 600; padding: 2px 6px;
+  border-radius: 4px; text-transform: uppercase;
+}
+.alert-type.critical { background: rgba(255,69,58,0.15); color: var(--red); }
+.alert-type.warn { background: rgba(255,159,10,0.15); color: var(--orange); }
+.alert-type.info { background: rgba(10,132,255,0.15); color: var(--blue); }
+
+.alert-domain { font-family: var(--mono); font-size: 12px; color: var(--blue); }
+.alert-source { font-size: 11px; color: var(--text-secondary); }
+.alert-time { font-size: 11px; color: var(--text-secondary); margin-left: auto; }
+.alert-message { font-size: 12px; color: var(--text-secondary); }
+
+.alerts-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.alerts-empty-icon { font-size: 48px; color: var(--green); margin-bottom: 12px; }
+
+/* LOGS */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.log-line-count { font-size: 12px; color: var(--text-secondary); }
+
+.log-clear-btn {
+  background: none; border: 1px solid #555; color: var(--text-secondary);
+  padding: 4px 10px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; margin-left: auto;
+}
+.log-clear-btn:hover { color: var(--text); border-color: #777; }
+
+.log-viewer {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  height: calc(100vh - 140px);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-line { margin-bottom: 2px; }
+.log-time { color: #666; }
+.log-level-info { color: var(--blue); }
+.log-level-warn { color: var(--orange); }
+.log-level-err { color: var(--red); }
+.log-msg { color: var(--text); }
+
+/* SETTINGS */
+.settings-form {
+  max-width: 600px;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.settings-label { font-size: 14px; }
+
+.settings-input {
+  background: var(--card-bg);
+  border: 1px solid #555;
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--mono);
+  width: 200px;
+}
+
+.settings-input:focus { outline: none; border-color: var(--blue); }
+
+/* TOGGLE */
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  background: #3a3a3a;
+  border-radius: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toggle.on { background: var(--green); }
+
+.toggle-knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 20px; height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle.on .toggle-knob { transform: translateX(18px); }
+
+.save-btn {
+  background: var(--blue);
+  color: white;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+}
+.save-btn:hover { opacity: 0.85; }
+
+/* TOAST */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 16px 24px;
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s;
+  z-index: 100;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-left: 4px solid var(--green); }
+.toast.warning { border-left: 4px solid var(--orange); }
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  text-align: center;
+}
+
+.modal-icon { font-size: 48px; color: var(--red); margin-bottom: 16px; }
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.modal-message { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
+
+.modal-buttons { display: flex; gap: 12px; justify-content: center; }
+.modal-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+.modal-btn.cancel { background: #3a3a3a; color: var(--text); }
+.modal-btn.confirm { background: var(--red); color: white; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-header">DNS Attack Defender</div>
+  <div class="sidebar-items">
+    <div class="sidebar-item active" data-view="dashboard" onclick="navigate('dashboard')">
+      <span class="icon">🛡️</span> Dashboard
+    </div>
+    <div class="sidebar-item" data-view="doh" id="sidebar-doh" onclick="navigate('doh')">
+      <span class="icon">🔒</span> DoH Control
+    </div>
+    <div class="sidebar-item" data-view="alerts" onclick="navigate('alerts')">
+      <span class="icon">⚠️</span> Alerts
+    </div>
+    <div class="sidebar-item" data-view="logs" onclick="navigate('logs')">
+      <span class="icon">📄</span> Logs
+    </div>
+    <div class="sidebar-item" data-view="settings" onclick="navigate('settings')">
+      <span class="icon">⚙️</span> Settings
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-dot running" id="status-dot"></div>
+    <span class="status-text" id="status-text">Running</span>
+    <span class="status-pid" id="status-pid">PID: 8421</span>
+    <button class="status-btn" id="btn-start" onclick="startDaemon()" title="Start" disabled>▶</button>
+    <button class="status-btn" id="btn-stop" onclick="stopDaemon()" title="Stop">⏹</button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+  <div class="main-header" id="main-header">Dashboard</div>
+
+  <!-- DASHBOARD VIEW -->
+  <div class="view active" id="view-dashboard">
+    <div class="status-banner" id="status-banner">
+      <div class="status-banner-text">
+        <h2>DNS Attack Defender</h2>
+        <p id="banner-status">Protecting your DNS — daemon running</p>
+      </div>
+      <div class="status-banner-icon running" id="banner-icon">🛡️</div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="metric-card-header"><div class="metric-card-icon" style="color:var(--blue)">⇅</div></div>
+        <div class="metric-card-value" id="m-queries">0</div>
+        <div class="metric-card-title">Total Queries</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-header"><div class="metric-card-icon" style="color:var(--red)">✋</div></div>
+        <div class="metric-card-value" id="m-blocked">0</div>
+        <div class="metric-card-title">Blocked</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-header"><div class="metric-card-icon" style="color:var(--orange)">⏱</div></div>
+        <div class="metric-card-value" id="m-ratelimited">0</div>
+        <div class="metric-card-title">Rate Limited</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-header"><div class="metric-card-icon" style="color:var(--green)">💾</div></div>
+        <div class="metric-card-value" id="m-cachehit">0%</div>
+        <div class="metric-card-title">Cache Hit Rate</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-header"><div class="metric-card-icon" style="color:var(--purple)">🕐</div></div>
+        <div class="metric-card-value" id="m-latency">0ms</div>
+        <div class="metric-card-title">Avg Query Time</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-header"><div class="metric-card-icon" style="color:var(--green)" id="m-doh-icon">🔒</div></div>
+        <div class="metric-card-value" id="m-doh" style="font-size:18px; padding-top:6px;">Enabled</div>
+        <div class="metric-card-title">DoH Status</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">Query Timeline</div>
+      <div class="chart" id="chart"></div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> Queries</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Blocked</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Rate Limited</div>
+      </div>
+    </div>
+
+    <div class="breakdown">
+      <div class="breakdown-title">Blocked by Reason</div>
+      <div id="breakdown-rows"></div>
+    </div>
+
+    <div class="last-updated" id="last-updated">Last updated: —</div>
+  </div>
+
+  <!-- DOH CONTROL VIEW -->
+  <div class="view" id="view-doh">
+    <div class="doh-hero" id="doh-hero">
+      <div class="doh-hero-icon enabled" id="doh-hero-icon">🔒</div>
+      <div class="doh-hero-title" id="doh-hero-title">DoH is Enabled</div>
+      <div class="doh-hero-subtitle" id="doh-hero-subtitle">DNS queries are encrypted over HTTPS</div>
+    </div>
+
+    <div class="section-title">Quick Actions</div>
+    <div class="doh-actions">
+      <div class="doh-action-btn" onclick="toggleDoH()">
+        <div class="doh-action-icon" style="color:var(--blue)">🔄</div>
+        <div class="doh-action-title">Toggle DoH</div>
+        <div class="doh-action-desc">Switch DoH on or off</div>
+      </div>
+      <div class="doh-action-btn" onclick="enableDoH()">
+        <div class="doh-action-icon" style="color:var(--green)">🔓</div>
+        <div class="doh-action-title">Re-enable DoH</div>
+        <div class="doh-action-desc">Turn DoH back on</div>
+      </div>
+      <div class="doh-action-btn" onclick="showEmergencyModal()">
+        <div class="doh-action-icon" style="color:var(--red)">⛔</div>
+        <div class="doh-action-title">Emergency Disable</div>
+        <div class="doh-action-desc">Instantly disable DoH</div>
+      </div>
+    </div>
+
+    <div class="section-title">Kill Switch Script</div>
+    <div class="kill-switch-list">
+      <div class="kill-switch-row">
+        <div class="kill-switch-cmd">./doh-killswitch.sh toggle</div>
+        <div class="kill-switch-desc">Toggle DoH on/off</div>
+        <button class="kill-switch-run" onclick="runKillSwitch('toggle')">Run</button>
+      </div>
+      <div class="kill-switch-row">
+        <div class="kill-switch-cmd">./doh-killswitch.sh off</div>
+        <div class="kill-switch-desc">Emergency disable DoH</div>
+        <button class="kill-switch-run" onclick="runKillSwitch('off')">Run</button>
+      </div>
+      <div class="kill-switch-row">
+        <div class="kill-switch-cmd">./doh-killswitch.sh on</div>
+        <div class="kill-switch-desc">Re-enable DoH</div>
+        <button class="kill-switch-run" onclick="runKillSwitch('on')">Run</button>
+      </div>
+      <div class="kill-switch-row">
+        <div class="kill-switch-cmd">./doh-killswitch.sh stop</div>
+        <div class="kill-switch-desc">Stop DAD + remove PF + restore DNS</div>
+        <button class="kill-switch-run" onclick="runKillSwitch('stop')">Run</button>
+      </div>
+      <div class="kill-switch-row">
+        <div class="kill-switch-cmd">./doh-killswitch.sh restore</div>
+        <div class="kill-switch-desc">Restore DNS to DHCP defaults (last resort)</div>
+        <button class="kill-switch-run" onclick="runKillSwitch('restore')">Run</button>
+      </div>
+    </div>
+
+    <div class="section-title">Signal Reference</div>
+    <div class="signal-table">
+      <div class="signal-row">
+        <div class="signal-name">SIGHUP</div>
+        <div class="signal-desc">Toggle DoH on/off</div>
+        <div class="signal-cmd">kill -HUP $(pgrep dad)</div>
+      </div>
+      <div class="signal-row">
+        <div class="signal-name">SIGUSR1</div>
+        <div class="signal-desc">Emergency disable DoH</div>
+        <div class="signal-cmd">kill -USR1 $(pgrep dad)</div>
+      </div>
+      <div class="signal-row">
+        <div class="signal-name">SIGUSR2</div>
+        <div class="signal-desc">Re-enable DoH</div>
+        <div class="signal-cmd">kill -USR2 $(pgrep dad)</div>
+      </div>
+      <div class="signal-row">
+        <div class="signal-name">SIGTERM</div>
+        <div class="signal-desc">Stop DAD daemon</div>
+        <div class="signal-cmd">kill -TERM $(pgrep dad)</div>
+      </div>
+    </div>
+
+    <div class="safety-info">
+      <h3>🛡️ Safety Layers</h3>
+      <div>1. Auto-failover — DoH errors fall back to plain DNS per-query</div>
+      <div>2. Auto-disable — 5 consecutive failures → DoH off</div>
+      <div>3. Signal kill switch — kill -USR1 $(pgrep dad)</div>
+      <div>4. Shell script — ./doh-killswitch.sh off</div>
+      <div>5. Config — set use_doh: false in config.yaml and restart</div>
+    </div>
+  </div>
+
+  <!-- ALERTS VIEW -->
+  <div class="view" id="view-alerts">
+    <div class="alert-toolbar">
+      <span class="alert-count" id="alert-count">0 alerts</span>
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all" onclick="filterAlerts('all')">All</button>
+        <button class="filter-btn" data-filter="critical" onclick="filterAlerts('critical')">Critical</button>
+        <button class="filter-btn" data-filter="warn" onclick="filterAlerts('warn')">Warning</button>
+        <button class="filter-btn" data-filter="info" onclick="filterAlerts('info')">Info</button>
+      </div>
+      <button class="log-clear-btn" onclick="clearAlerts()">Clear</button>
+    </div>
+    <div class="alert-list" id="alert-list"></div>
+  </div>
+
+  <!-- LOGS VIEW -->
+  <div class="view" id="view-logs">
+    <div class="log-toolbar">
+      <span class="log-line-count" id="log-count">0 lines</span>
+      <button class="log-clear-btn" onclick="clearLogs()">Clear</button>
+    </div>
+    <div class="log-viewer" id="log-viewer"></div>
+  </div>
+
+  <!-- SETTINGS VIEW -->
+  <div class="view" id="view-settings">
+    <div class="settings-form">
+      <div class="settings-section">
+        <div class="settings-section-title">Server</div>
+        <div class="settings-row">
+          <span class="settings-label">Listen Port</span>
+          <input class="settings-input" type="text" value="5353" id="cfg-port">
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Upstream Timeout</span>
+          <input class="settings-input" type="text" value="5s" id="cfg-timeout">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">DNS-over-HTTPS</div>
+        <div class="settings-row">
+          <span class="settings-label">Enable DoH</span>
+          <div class="toggle on" id="cfg-doh" onclick="toggleSetting('cfg-doh')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">DoH Upstream URL</span>
+          <input class="settings-input" type="text" value="https://cloudflare-dns.com/dns-query" id="cfg-doh-url" style="width:350px">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">DNSSEC Validation</div>
+        <div class="settings-row">
+          <span class="settings-label">Enable DNSSEC</span>
+          <div class="toggle on" id="cfg-dnssec" onclick="toggleSetting('cfg-dnssec')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Reject Bogus Responses</span>
+          <div class="toggle on" id="cfg-bogus" onclick="toggleSetting('cfg-bogus')"><div class="toggle-knob"></div></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Rate Limiting</div>
+        <div class="settings-row">
+          <span class="settings-label">Enable Rate Limiting</span>
+          <div class="toggle on" id="cfg-ratelimit" onclick="toggleSetting('cfg-ratelimit')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Per-IP QPS</span>
+          <input class="settings-input" type="text" value="50" id="cfg-qps">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Blocklists</div>
+        <div class="settings-row">
+          <span class="settings-label">Enable Blocklists</span>
+          <div class="toggle on" id="cfg-blocklists" onclick="toggleSetting('cfg-blocklists')"><div class="toggle-knob"></div></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Cache</div>
+        <div class="settings-row">
+          <span class="settings-label">Enable Cache</span>
+          <div class="toggle on" id="cfg-cache" onclick="toggleSetting('cfg-cache')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Max Entries</span>
+          <input class="settings-input" type="text" value="10000" id="cfg-cache-max">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">PF Firewall</div>
+        <div class="settings-row">
+          <span class="settings-label">Enable PF Redirect</span>
+          <div class="toggle" id="cfg-pf" onclick="toggleSetting('cfg-pf')"><div class="toggle-knob"></div></div>
+        </div>
+      </div>
+
+      <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMERGENCY MODAL -->
+<div class="modal-overlay" id="emergency-modal">
+  <div class="modal">
+    <div class="modal-icon">⛔</div>
+    <div class="modal-title">Emergency Disable DoH?</div>
+    <div class="modal-message">This will instantly disable DoH and fall back to plain DNS. Use if DoH is causing connectivity issues.</div>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn confirm" onclick="emergencyDisable()">Disable Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// STATE
+let daemonRunning = true;
+let dohEnabled = true;
+let currentFilter = 'all';
+let metricsInterval = null;
+let logInterval = null;
+let alertInterval = null;
+
+// MOCK DATA
+let metrics = {
+  totalQueries: 0,
+  blocked: { blocklist_hit: 0, dga_detected: 0, dns_tunneling: 0, dnssec_fail: 0, rebinding: 0, rate_limited: 0 },
+  cacheHits: 0,
+  cacheMisses: 0,
+  rateLimited: 0,
+  queryDuration: 0,
+  history: []
+};
+
+let alerts = [];
+let logs = [];
+const logTemplates = [
+  { level: 'INFO', msg: 'DNS query from 192.168.1.%IP% for %DOMAIN% (%QTYPE%)' },
+  { level: 'INFO', msg: 'Cache HIT for %DOMAIN% (%QTYPE%)' },
+  { level: 'INFO', msg: 'Cache MISS for %DOMAIN% — forwarding upstream' },
+  { level: 'INFO', msg: 'DoH query to cloudflare-dns.com — 200 OK (23ms)' },
+  { level: 'WARN', msg: 'High entropy subdomain detected: %SUBDOMAIN%.%DOMAIN% — entropy=3.82' },
+  { level: 'WARN', msg: 'DGA score for %DOMAIN%: 0.65 (threshold=0.5) — flagged' },
+  { level: 'ERR',  msg: 'Blocked %DOMAIN% — reason: blocklist_hit (urlhaus)' },
+  { level: 'ERR',  msg: 'Rate limit exceeded for 192.168.1.%IP% — action: drop' },
+  { level: 'INFO', msg: 'DNSSEC validation: VALID for %DOMAIN%' },
+  { level: 'INFO', msg: 'Blocklist refresh: 45,231 domains loaded' },
+  { level: 'WARN', msg: 'DoH health check: 1 failure (3/5 consecutive)' },
+  { level: 'INFO', msg: 'N-gram model loaded: 12,847 trigrams from data/legitimate-domains.txt' },
+];
+
+const domains = ['google.com','github.com','evil-malware.net','qzxvpmn123.xyz','example.com','facebook.com',
+  'xkjhsdf8923jksdf.com','cloudflare.com','malware-c2.ru','netflix.com','amazonaws.com',
+  'phishing-site.tk','stackoverflow.com','dga-domain123.ru','apple.com','suspicious.co'];
+const qtypes = ['A','AAAA','MX','TXT','NS','CNAME'];
+const subdomains = ['MFRA2YTKOJQWY2LT','OJQXG5DFONZS2LTNXYZ','api-staging-2','www','mail','d111111abcdef8'];
+
+function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+// NAVIGATION
+function navigate(view) {
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`[data-view="${view}"]`).classList.add('active');
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.getElementById(`view-${view}`).classList.add('active');
+  const titles = { dashboard: 'Dashboard', doh: 'DoH Control', alerts: 'Alerts', logs: 'Logs', settings: 'Settings' };
+  document.getElementById('main-header').textContent = titles[view];
+}
+
+// DAEMON CONTROL
+function startDaemon() {
+  daemonRunning = true;
+  document.getElementById('status-dot').className = 'status-dot starting';
+  document.getElementById('status-text').textContent = 'Starting...';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-stop').disabled = false;
+  setTimeout(() => {
+    document.getElementById('status-dot').className = 'status-dot running';
+    document.getElementById('status-text').textContent = 'Running';
+    document.getElementById('status-pid').textContent = 'PID: ' + randInt(8000, 9999);
+    document.getElementById('banner-status').textContent = 'Protecting your DNS — daemon running';
+    document.getElementById('banner-icon').textContent = '🛡️';
+    document.getElementById('banner-icon').className = 'status-banner-icon running';
+    document.getElementById('status-banner').classList.remove('stopped');
+    startMetrics();
+    addLog('INFO', 'DNS Attack Defender daemon started');
+    addLog('INFO', 'Listening on 127.0.0.1:5353');
+    addLog('INFO', 'Upstream: 1.1.1.1:53 (DoH: true)');
+    addLog('INFO', 'DoH endpoint: https://cloudflare-dns.com/dns-query');
+    showToast('Daemon started', 'success');
+  }, 1500);
+}
+
+function stopDaemon() {
+  daemonRunning = false;
+  document.getElementById('status-dot').className = 'status-dot stopped';
+  document.getElementById('status-text').textContent = 'Stopped';
+  document.getElementById('status-pid').textContent = '';
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('banner-status').textContent = 'Daemon is not running';
+  document.getElementById('banner-icon').textContent = '🛫';
+  document.getElementById('banner-icon').className = 'status-banner-icon stopped';
+  document.getElementById('status-banner').classList.add('stopped');
+  stopMetrics();
+  addLog('WARN', 'Daemon stopped by user');
+  showToast('Daemon stopped', 'warning');
+}
+
+// DOH CONTROL
+function toggleDoH() {
+  dohEnabled = !dohEnabled;
+  updateDoHUI();
+  addLog('INFO', `SIGHUP received — DoH ${dohEnabled ? 'enabled' : 'disabled'}`);
+  showToast(`DoH ${dohEnabled ? 'enabled' : 'disabled'}`, dohEnabled ? 'success' : 'warning');
+}
+
+function enableDoH() {
+  dohEnabled = true;
+  updateDoHUI();
+  addLog('INFO', 'SIGUSR2 received — re-enabling DoH');
+  showToast('DoH re-enabled', 'success');
+}
+
+function showEmergencyModal() {
+  document.getElementById('emergency-modal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('emergency-modal').classList.remove('show');
+}
+
+function emergencyDisable() {
+  dohEnabled = false;
+  updateDoHUI();
+  closeModal();
+  addLog('ERR', 'SIGUSR1 received — emergency DoH disable');
+  showToast('DoH emergency disabled', 'warning');
+}
+
+function updateDoHUI() {
+  const hero = document.getElementById('doh-hero');
+  const icon = document.getElementById('doh-hero-icon');
+  const title = document.getElementById('doh-hero-title');
+  const subtitle = document.getElementById('doh-hero-subtitle');
+  const sidebarDoh = document.getElementById('sidebar-doh');
+  const mDohIcon = document.getElementById('m-doh-icon');
+  const mDoh = document.getElementById('m-doh');
+
+  if (dohEnabled) {
+    hero.classList.remove('disabled');
+    icon.textContent = '🔒'; icon.className = 'doh-hero-icon enabled';
+    title.textContent = 'DoH is Enabled';
+    subtitle.textContent = 'DNS queries are encrypted over HTTPS';
+    sidebarDoh.classList.remove('doh-disabled');
+    mDohIcon.textContent = '🔒'; mDoh.textContent = 'Enabled';
+  } else {
+    hero.classList.add('disabled');
+    icon.textContent = '🔓'; icon.className = 'doh-hero-icon disabled';
+    title.textContent = 'DoH is Disabled';
+    subtitle.textContent = 'DNS queries use plain DNS (unencrypted)';
+    sidebarDoh.classList.add('doh-disabled');
+    mDohIcon.textContent = '🔓'; mDoh.textContent = 'Disabled';
+  }
+}
+
+function runKillSwitch(action) {
+  const msgs = {
+    toggle: 'DoH toggled via kill switch',
+    off: 'DoH disabled via kill switch',
+    on: 'DoH enabled via kill switch',
+    stop: 'DAD stopped + PF removed + DNS restored',
+    restore: 'DNS restored to DHCP defaults'
+  };
+  addLog('WARN', `Kill switch: ${msgs[action]}`);
+  showToast(msgs[action], action === 'stop' || action === 'restore' ? 'warning' : 'success');
+  if (action === 'off') { dohEnabled = false; updateDoHUI(); }
+  if (action === 'on') { dohEnabled = true; updateDoHUI(); }
+  if (action === 'toggle') { toggleDoH(); }
+  if (action === 'stop') { stopDaemon(); }
+}
+
+// METRICS
+function startMetrics() {
+  if (metricsInterval) clearInterval(metricsInterval);
+  metricsInterval = setInterval(updateMetrics, 2000);
+  updateMetrics();
+}
+
+function stopMetrics() {
+  if (metricsInterval) clearInterval(metricsInterval);
+}
+
+function updateMetrics() {
+  if (!daemonRunning) return;
+
+  const qps = randInt(5, 50);
+  metrics.totalQueries += qps;
+  metrics.cacheHits += randInt(3, 35);
+  metrics.cacheMisses += randInt(2, 15);
+  metrics.rateLimited += randInt(0, 3);
+
+  // Random blocked
+  const reasons = Object.keys(metrics.blocked);
+  if (Math.random() > 0.6) {
+    const reason = rand(reasons);
+    metrics.blocked[reason] += 1;
+    if (reason !== 'rate_limited') {
+      addAlert(reason);
+    }
+  }
+
+  metrics.queryDuration = 0.5 + Math.random() * 5;
+
+  // History snapshot
+  const blocked = Object.values(metrics.blocked).reduce((a, b) => a + b, 0);
+  metrics.history.push({
+    timestamp: Date.now(),
+    totalQueries: qps,
+    blocked: Math.random() > 0.6 ? randInt(0, 5) : 0,
+    rateLimited: randInt(0, 3)
+  });
+  if (metrics.history.length > 40) metrics.history.shift();
+
+  renderMetrics();
+}
+
+function renderMetrics() {
+  document.getElementById('m-queries').textContent = formatNum(metrics.totalQueries);
+  const blocked = Object.values(metrics.blocked).reduce((a, b) => a + b, 0);
+  document.getElementById('m-blocked').textContent = formatNum(blocked);
+  document.getElementById('m-ratelimited').textContent = formatNum(metrics.rateLimited);
+  const hitRate = metrics.cacheHits + metrics.cacheMisses > 0
+    ? (metrics.cacheHits / (metrics.cacheHits + metrics.cacheMisses) * 100).toFixed(1) + '%'
+    : '0%';
+  document.getElementById('m-cachehit').textContent = hitRate;
+  document.getElementById('m-latency').textContent = metrics.queryDuration.toFixed(2) + 'ms';
+
+  document.getElementById('last-updated').textContent =
+    'Last updated: ' + new Date().toLocaleTimeString();
+
+  renderChart();
+  renderBreakdown();
+}
+
+function renderChart() {
+  const chart = document.getElementById('chart');
+  chart.innerHTML = '';
+  const data = metrics.history;
+  if (data.length === 0) return;
+
+  const maxVal = Math.max(...data.map(d => Math.max(d.totalQueries, d.blocked, d.rateLimited)), 1);
+
+  data.forEach(d => {
+    const group = document.createElement('div');
+    group.className = 'chart-bar-group';
+
+    const qBar = document.createElement('div');
+    qBar.className = 'chart-bar';
+    qBar.style.height = (d.totalQueries / maxVal * 100) + '%';
+    qBar.style.background = 'var(--blue)';
+    qBar.style.opacity = '0.8';
+
+    const bBar = document.createElement('div');
+    bBar.className = 'chart-bar';
+    bBar.style.height = (d.blocked / maxVal * 100) + '%';
+    bBar.style.background = 'var(--red)';
+
+    const rBar = document.createElement('div');
+    rBar.className = 'chart-bar';
+    rBar.style.height = (d.rateLimited / maxVal * 100) + '%';
+    rBar.style.background = 'var(--orange)';
+
+    group.appendChild(qBar);
+    group.appendChild(bBar);
+    group.appendChild(rBar);
+    chart.appendChild(group);
+  });
+}
+
+function renderBreakdown() {
+  const container = document.getElementById('breakdown-rows');
+  const entries = Object.entries(metrics.blocked)
+    .filter(([k, v]) => k !== 'rate_limited' && v > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (entries.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;padding:8px 0">No blocks yet</div>';
+    return;
+  }
+
+  const max = Math.max(...entries.map(e => e[1]));
+  const colors = ['var(--red)','var(--orange)','var(--purple)','var(--blue)','var(--yellow)','#ff6b6b'];
+
+  container.innerHTML = entries.map(([reason, count], i) => `
+    <div class="breakdown-row">
+      <span style="width:140px;font-size:13px">${reason.replace(/_/g, ' ')}</span>
+      <div class="breakdown-bar-bg">
+        <div class="breakdown-bar-fill" style="width:${count/max*100}%;background:${colors[i % colors.length]}"></div>
+      </div>
+      <span style="font-weight:600;font-variant-numeric:tabular-nums;width:60px;text-align:right">${count}</span>
+    </div>
+  `).join('');
+}
+
+function formatNum(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+// ALERTS
+function addAlert(reason) {
+  const severities = {
+    blocklist_hit: 'critical', dga_detected: 'critical', dns_tunneling: 'warn',
+    dnssec_fail: 'critical', rebinding: 'critical', rate_limited: 'warn'
+  };
+  const types = {
+    blocklist_hit: 'Blocklist Hit', dga_detected: 'DGA Detected', dns_tunneling: 'DNS Tunneling',
+    dnssec_fail: 'DNSSEC Fail', rebinding: 'DNS Rebinding', rate_limited: 'Rate Limited'
+  };
+  const messages = {
+    blocklist_hit: 'Domain blocked by threat intelligence feed',
+    dga_detected: 'Domain flagged as DGA-generated (score > 0.5)',
+    dns_tunneling: 'High-entropy subdomain — possible DNS exfiltration',
+    dnssec_fail: 'DNSSEC validation failed — possible cache poisoning',
+    rebinding: 'Public domain resolving to private IP — rebinding attack',
+    rate_limited: 'Query rate exceeded per-IP threshold'
+  };
+
+  const domain = rand(domains);
+  const alert = {
+    id: Date.now() + Math.random(),
+    timestamp: new Date(),
+    type: types[reason] || reason,
+    severity: severities[reason] || 'info',
+    source: `192.168.1.${randInt(2, 254)}`,
+    domain: domain,
+    message: messages[reason] || 'Unknown alert'
+  };
+  alerts.unshift(alert);
+  if (alerts.length > 200) alerts.pop();
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const list = document.getElementById('alert-list');
+  const filtered = currentFilter === 'all' ? alerts : alerts.filter(a => a.severity === currentFilter);
+
+  document.getElementById('alert-count').textContent = `${alerts.length} alerts`;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `
+      <div class="alerts-empty">
+        <div class="alerts-empty-icon">✅</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:4px">No alerts</div>
+        <div style="font-size:13px">Watching for new alerts...</div>
+      </div>`;
+    return;
+  }
+
+  const icons = { critical: '⛔', warn: '⚠️', info: 'ℹ️' };
+  list.innerHTML = filtered.map(a => `
+    <div class="alert-row">
+      <div class="alert-icon ${a.severity}">${icons[a.severity]}</div>
+      <div class="alert-content">
+        <div class="alert-header">
+          <span class="alert-type ${a.severity}">${a.type}</span>
+          <span class="alert-domain">${a.domain}</span>
+          <span class="alert-source">from ${a.source}</span>
+          <span class="alert-time">${a.timestamp.toLocaleTimeString()}</span>
+        </div>
+        <div class="alert-message">${a.message}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterAlerts(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+  renderAlerts();
+}
+
+function clearAlerts() {
+  alerts = [];
+  renderAlerts();
+  showToast('Alerts cleared', 'success');
+}
+
+// LOGS
+function addLog(level, msg) {
+  const time = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  logs.push({ time, level, msg });
+  if (logs.length > 500) logs.shift();
+  renderLogs();
+}
+
+function generateLog() {
+  if (!daemonRunning) return;
+  const template = rand(logTemplates);
+  const msg = template.msg
+    .replace('%DOMAIN%', rand(domains))
+    .replace('%QTYPE%', rand(qtypes))
+    .replace('%IP%', randInt(2, 254))
+    .replace('%SUBDOMAIN%', rand(subdomains));
+  addLog(template.level, msg);
+}
+
+function renderLogs() {
+  const viewer = document.getElementById('log-viewer');
+  document.getElementById('log-count').textContent = `${logs.length} lines`;
+
+  const levelClass = { INFO: 'log-level-info', WARN: 'log-level-warn', ERR: 'log-level-err' };
+
+  viewer.innerHTML = logs.slice(-200).map(l =>
+    `<div class="log-line"><span class="log-time">${l.time}</span> <span class="${levelClass[l.level] || ''}">[${l.level}]</span> <span class="log-msg">${l.msg}</span></div>`
+  ).join('');
+
+  viewer.scrollTop = viewer.scrollHeight;
+}
+
+function clearLogs() {
+  logs = [];
+  renderLogs();
+}
+
+// SETTINGS
+function toggleSetting(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on');
+}
+
+function saveSettings() {
+  showToast('Settings saved — restart daemon to apply', 'success');
+  addLog('INFO', 'Configuration updated by user');
+}
+
+// TOAST
+function showToast(msg, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast show ' + type;
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// INIT
+function init() {
+  // Start metrics
+  startMetrics();
+
+  // Start log generation
+  logInterval = setInterval(generateLog, 800);
+  // Initial logs
+  addLog('INFO', 'DNS Attack Defender v0.1.0 starting...');
+  addLog('INFO', 'Loading configuration from config.yaml');
+  addLog('INFO', 'DNSSEC: loaded 1 trust anchor(s) — full chain validation enabled');
+  addLog('INFO', 'DGA: n-gram model loaded from data/legitimate-domains.txt (12847 trigrams)');
+  addLog('INFO', 'Blocklists loaded: 45,231 domains blocked');
+  addLog('INFO', 'DoH client initialized — endpoint: https://cloudflare-dns.com/dns-query');
+  addLog('INFO', 'DNS proxy listening on 127.0.0.1:5353');
+  addLog('INFO', 'DoH kill switch: send SIGHUP to toggle DoH on/off');
+  addLog('INFO', 'Prometheus metrics available at 127.0.0.1:9090/metrics');
+
+  // Generate some initial alerts
+  setTimeout(() => addAlert('blocklist_hit'), 2000);
+  setTimeout(() => addAlert('dga_detected'), 4000);
+  setTimeout(() => addAlert('dns_tunneling'), 6000);
+
+  renderAlerts();
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- LaunchAgent: starts the macOS GUI app on user login -->
+    <key>Label</key>
+    <string>com.castiel.app</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Castiel.app/Contents/MacOS/Castiel</string>
+    </array>
+
+    <!-- Start on login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Keep alive: restart if app crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Run in user session (not root) -->
+    <key>LimitLoadToSessionType</key>
+    <array>
+        <string>Aqua</string>
+    </array>
+
+    <!-- Hide app on launch (runs in background, user opens via Dock) -->
+    <key>LaunchOnlyOnce</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

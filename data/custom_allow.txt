@@ -1,0 +1,3 @@
+# Custom allow list — one domain per line
+# Lines starting with # are comments
+# Domains here bypass all blocklist checks

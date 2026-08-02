@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Castiel
+Comment=DNS Defense Daemon — DGA detection, tunneling prevention, DNSSEC validation
+Exec=/usr/local/bin/castiel -config /usr/local/etc/castiel/config.yaml
+Icon=castiel
+Terminal=true
+Type=Application
+Categories=System;Security;Network;
+Keywords=dns;security;firewall;dga;tunneling;
+StartupNotify=true

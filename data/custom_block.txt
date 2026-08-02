@@ -1,0 +1,2 @@
+# Custom block list — one domain per line
+# Lines starting with # are comments

@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: dad
+    static_configs:
+      - targets: ["host.docker.internal:9090"]
+        labels:
+          application: dns-attack-defender
+    metrics_path: /metrics
