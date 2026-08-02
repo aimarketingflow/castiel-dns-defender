@@ -4,6 +4,7 @@ castiel.exe
 castiel-arm64
 castiel-arm64.exe
 attack-sim
+attack-sim.exe
 linux_build/castiel
 linux_build/castiel-arm64
 windows_build/castiel.exe
@@ -43,3 +44,15 @@ Thumbs.db
 config.local.yaml
 *.pem
 *.key
+
+# GoReleaser
+dist/
+
+# Large diagnostic archives
+sysdiagnose_*.tar.gz
+
+# Dev-only files (not for public repo)
+GAP_ANALYSIS.md
+research.html
+diagrams.html
+ui-mockup.html

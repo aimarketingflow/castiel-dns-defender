@@ -40,6 +40,21 @@ type Proxy struct {
 	queryBatch     chan *batchEntry     // query batching channel
 	batchTimer     *time.Ticker
 	batchSize      int
+
+	// New Tier 1 detectors
+	ednsInspector    *detectors.EDNSInspector
+	nxdomainTracker  *detectors.NXDomainTracker
+	dnssecDowngrade  *detectors.DNSSECDowngradeDetector
+	dohBypass        *detectors.DoHBypassDetector
+
+	// Tier 2 detectors
+	fastFlux         *detectors.FastFluxDetector
+	dictionaryDGA    *detectors.DictionaryDGADetector
+	sparseDGA        *detectors.SparseDGADetector
+	cnameValidator   *detectors.CNAMEChainValidator
+	dnsCalculation   *detectors.DNSCalculationDetector
+	lowSlowExfil     *detectors.LowSlowExfilDetector
+	lookalike        *detectors.LookalikeDetector
 }
 
 type batchEntry struct {
@@ -61,10 +76,23 @@ func New(cfg *config.Config, bl *blocklists.Manager, am *alerts.Manager) (*Proxy
 		c2:         detectors.NewC2Detector(cfg.C2Detection),
 		client: &dns.Client{
 			Timeout: cfg.Server.TimeoutDuration(),
-			UDPSize: 4096,
+			UDPSize: 1232, // RFC-recommended max to prevent IP fragmentation attacks
 		},
 		connPool:  make(map[string]*dns.Conn),
 		batchSize: 16,
+
+		ednsInspector:   detectors.NewEDNSInspector(),
+		nxdomainTracker: detectors.NewNXDomainTracker(cfg.NXDomainTracking),
+		dnssecDowngrade: detectors.NewDNSSECDowngradeDetector(),
+		dohBypass:       detectors.NewDoHBypassDetector(),
+
+		fastFlux:       detectors.NewFastFluxDetector(cfg.C2Detection),
+		dictionaryDGA:  detectors.NewDictionaryDGADetector(),
+		sparseDGA:      detectors.NewSparseDGADetector(detectors.SparseDGAConfig(cfg.SparseDGA)),
+		cnameValidator: detectors.NewCNAMEChainValidator(cfg.CNAMEValidation.MaxDepth),
+		dnsCalculation: detectors.NewDNSCalculationDetector(),
+		lowSlowExfil:   detectors.NewLowSlowExfilDetector(),
+		lookalike:      detectors.NewLookalikeDetector(cfg.LookalikeDetection.ProtectedDomains),
 	}
 
 	// Initialize DoH client if enabled
@@ -76,6 +104,31 @@ func New(cfg *config.Config, bl *blocklists.Manager, am *alerts.Manager) (*Proxy
 	// Initialize DNSSEC validator (falls back to AD-bit-only mode if trust anchors unavailable)
 	if cfg.DNSSEC.Enabled {
 		p.dnssecValidator = dnssec.NewValidator(cfg.DNSSEC.TrustAnchorFile, cfg.Server.Upstream, cfg.Server.TimeoutDuration())
+	}
+
+	// Start background cleanup for NXDomain tracker
+	if cfg.NXDomainTracking.Enabled {
+		p.nxdomainTracker.StartCleanup(5 * time.Minute)
+	}
+
+	// Start background cleanup for DNSSEC downgrade detector
+	if cfg.DNSSECDowngrade.Enabled {
+		p.dnssecDowngrade.StartCleanup(10*time.Minute, 24*time.Hour)
+	}
+
+	// Add custom DoH bypass IPs from config
+	if cfg.DoHBypass.Enabled {
+		for _, ip := range cfg.DoHBypass.BlockIPs {
+			p.dohBypass.AddResolver(ip, "custom")
+		}
+	}
+
+	// Start background cleanup for Tier 2 detectors
+	if cfg.SparseDGA.Enabled {
+		p.sparseDGA.StartCleanup(10 * time.Minute)
+	}
+	if cfg.LowSlowExfil.Enabled {
+		p.lowSlowExfil.StartCleanup(10 * time.Minute)
 	}
 
 	return p, nil
@@ -206,7 +259,77 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 			}
 		}
 
-		// 6. C2 / fast-flux detection
+		// 5b. Dictionary DGA detection (Matsnu/Suppobox-style)
+		if p.cfg.DictionaryDGA.Enabled {
+			if p.dictionaryDGA.IsDictionaryDGA(domain) {
+				metrics.DictionaryDGAAlerts.WithLabelValues(domain).Inc()
+				metrics.BlockedQueries.WithLabelValues("dictionary_dga").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "dictionary_dga",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   domain,
+					Message:  fmt.Sprintf("Dictionary DGA detected: %s (concatenated dictionary words)", domain),
+					Time:     startTime,
+				})
+				p.sendBlocked(w, r)
+				return
+			}
+		}
+
+		// 5c. Lookalike domain detection (typosquatting/homoglyph)
+		if p.cfg.LookalikeDetection.Enabled {
+			if finding := p.lookalike.CheckDomain(domain); finding != nil {
+				metrics.LookalikeAlerts.WithLabelValues(finding.Reason).Inc()
+				metrics.BlockedQueries.WithLabelValues("lookalike").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "lookalike_domain",
+					Severity: "warn",
+					Source:   clientIP,
+					Domain:   domain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+				p.sendBlocked(w, r)
+				return
+			}
+		}
+
+		// 5d. Sparse DGA tracking (records query for 24h pattern analysis)
+		if p.cfg.SparseDGA.Enabled {
+			p.sparseDGA.RecordQuery(clientIP, domain, false) // updated with NXDOMAIN status after response
+			if finding := p.sparseDGA.Analyze(clientIP); finding != nil {
+				metrics.SparseDGAAlerts.WithLabelValues(clientIP).Inc()
+				metrics.BlockedQueries.WithLabelValues("sparse_dga").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "sparse_dga",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   domain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+			}
+		}
+
+		// 5e. Low-and-slow exfiltration tracking
+		if p.cfg.LowSlowExfil.Enabled {
+			p.lowSlowExfil.RecordQuery(domain)
+			if finding := p.lowSlowExfil.Analyze(domain); finding != nil {
+				metrics.LowSlowExfilAlerts.WithLabelValues(finding.Reason).Inc()
+				metrics.BlockedQueries.WithLabelValues("low_slow_exfil").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "low_slow_exfil",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   domain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+			}
+		}
+
+		// 6. C2 / fast-flux detection (basic)
 		if p.cfg.C2Detection.Enabled {
 			if p.c2.IsSuspicious(domain) {
 				metrics.BlockedQueries.WithLabelValues("c2_fastflux").Inc()
@@ -220,6 +343,59 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 				})
 				p.sendBlocked(w, r)
 				return
+			}
+		}
+
+		// 6a. Enhanced fast-flux detection (rotation rate, double-flux)
+		if p.cfg.C2Detection.Enabled {
+			if finding := p.fastFlux.Analyze(domain); finding != nil {
+				metrics.FastFluxAlerts.WithLabelValues(finding.Reason).Inc()
+				metrics.BlockedQueries.WithLabelValues("fastflux_enhanced").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "fastflux_enhanced",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   domain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+				p.sendBlocked(w, r)
+				return
+			}
+		}
+
+		// 6b. Per-domain NXDOMAIN tracking (water torture defense)
+		if p.cfg.NXDomainTracking.Enabled {
+			apexDomain := detectors.ExtractApexDomain(domain)
+			if p.nxdomainTracker.IsBlocked(apexDomain) {
+				metrics.BlockedQueries.WithLabelValues("nxdomain_water_torture").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "nxdomain_water_torture",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   domain,
+					Message:  fmt.Sprintf("DNS water torture: domain %s blocked (NXDOMAIN threshold exceeded)", apexDomain),
+					Time:     startTime,
+				})
+				p.sendBlocked(w, r)
+				return
+			}
+		}
+	}
+
+	// 6c. EDNS0 option inspection (SiphonDNS defense)
+	if p.cfg.EDNSInspection.Enabled {
+		if finding := p.ednsInspector.Inspect(r, clientIP); finding != nil {
+			metrics.EDNSSuspicious.WithLabelValues(finding.Type).Inc()
+			p.alerts.Send(alerts.Alert{
+				Type:     "edns_suspicious",
+				Severity: "critical",
+				Source:   clientIP,
+				Message:  fmt.Sprintf("EDNS0 %s: %s", finding.Type, finding.Detail),
+				Time:     startTime,
+			})
+			if p.cfg.EDNSInspection.StripSuspicious {
+				detectors.StripEDNSOptions(r)
 			}
 		}
 	}
@@ -243,6 +419,142 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
+	// 8b. Response packet validation (TUDOOR defense)
+	if p.cfg.ResponseValidation.Enabled {
+		if err := detectors.ValidateResponse(resp, r); err != nil {
+			if ve, ok := err.(detectors.ResponseValidationError); ok {
+				metrics.ResponseValidationFailures.WithLabelValues(ve.Field).Inc()
+			} else {
+				metrics.ResponseValidationFailures.WithLabelValues("unknown").Inc()
+			}
+			p.alerts.Send(alerts.Alert{
+				Type:     "response_validation_fail",
+				Severity: "critical",
+				Source:   clientIP,
+				Message:  fmt.Sprintf("Malformed DNS response rejected: %v", err),
+				Time:     startTime,
+			})
+			if p.cfg.ResponseValidation.DropMalformed {
+				p.sendServFail(w, r)
+				return
+			}
+		}
+	}
+
+	// 8c. NXDOMAIN tracking (per-domain water torture detection)
+	if p.cfg.NXDomainTracking.Enabled && resp.Rcode == dns.RcodeNameError {
+		queryDomain := ""
+		if len(r.Question) > 0 {
+			queryDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		if queryDomain != "" {
+			apexDomain := detectors.ExtractApexDomain(queryDomain)
+			metrics.NXDomainPerDomain.WithLabelValues(apexDomain).Inc()
+			if p.nxdomainTracker.RecordNXDomain(apexDomain) {
+				metrics.NXDomainWaterTorture.WithLabelValues(apexDomain).Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "nxdomain_water_torture",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   apexDomain,
+					Message:  fmt.Sprintf("DNS water torture detected: %s (NXDOMAIN threshold exceeded)", apexDomain),
+					Time:     startTime,
+				})
+			}
+		}
+	}
+
+	// 8d. Sparse DGA NXDOMAIN update — re-record with actual NXDOMAIN status
+	if p.cfg.SparseDGA.Enabled && resp.Rcode == dns.RcodeNameError {
+		queryDomain := ""
+		if len(r.Question) > 0 {
+			queryDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		if queryDomain != "" {
+			p.sparseDGA.RecordQuery(clientIP, queryDomain, true)
+		}
+	}
+
+	// 8e. Fast-flux tracking — record response IPs and TTLs
+	if p.cfg.C2Detection.Enabled {
+		queryDomain := ""
+		if len(r.Question) > 0 {
+			queryDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		if queryDomain != "" {
+			ips := detectors.ExtractResponseIPs(resp)
+			ttl := detectors.ExtractResponseTTL(resp)
+			p.fastFlux.TrackResponse(queryDomain, ips, ttl)
+			nsIPs := detectors.ExtractNSIPs(resp)
+			if len(nsIPs) > 0 {
+				p.fastFlux.TrackNameservers(queryDomain, nsIPs)
+			}
+			// Also track in legacy C2 detector
+			p.c2.TrackResponse(queryDomain, ips, ttl)
+		}
+	}
+
+	// 8f. CNAME chain validation (dangling CNAMEs, loops, excessive depth)
+	if p.cfg.CNAMEValidation.Enabled {
+		queryDomain := ""
+		if len(r.Question) > 0 {
+			queryDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		if queryDomain != "" {
+			if finding := p.cnameValidator.ValidateChain(resp, queryDomain); finding != nil {
+				metrics.CNAMEChainAlerts.WithLabelValues(finding.Type).Inc()
+				shouldBlock := false
+				if finding.Type == "loop" && p.cfg.CNAMEValidation.BlockLoops {
+					shouldBlock = true
+				}
+				if finding.Type == "dangling" && p.cfg.CNAMEValidation.BlockDangling {
+					shouldBlock = true
+				}
+				if finding.Type == "excessive_depth" || finding.Type == "cross_bailiwick" {
+					shouldBlock = true
+				}
+				p.alerts.Send(alerts.Alert{
+					Type:     "cname_chain_" + finding.Type,
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   queryDomain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+				if shouldBlock {
+					p.sendBlocked(w, r)
+					return
+				}
+			}
+		}
+	}
+
+	// 8g. DNS calculation detection (APT12-style IP encoding)
+	if p.cfg.DNSCalculation.Enabled {
+		queryDomain := ""
+		if len(r.Question) > 0 {
+			queryDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		if queryDomain != "" {
+			ips := detectors.ExtractResponseIPs(resp)
+			isPublic := !strings.HasSuffix(queryDomain, ".local") && !strings.HasSuffix(queryDomain, ".localhost")
+			if finding := p.dnsCalculation.AnalyzeResponse(queryDomain, ips, isPublic); finding != nil {
+				metrics.DNSCalculationAlerts.WithLabelValues(finding.Reason).Inc()
+				metrics.BlockedQueries.WithLabelValues("dns_calculation").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "dns_calculation",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   queryDomain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+				p.sendBlocked(w, r)
+				return
+			}
+		}
+	}
+
 	// 9. DNSSEC validation
 	if p.cfg.DNSSEC.Enabled && p.cfg.DNSSEC.RejectBogus {
 		queryDomain := ""
@@ -252,6 +564,24 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 		if resp.Rcode == dns.RcodeSuccess && !p.validateDNSSEC(resp, queryDomain) {
 			metrics.BlockedQueries.WithLabelValues("dnssec_fail").Inc()
 			metrics.DNSSECValidations.WithLabelValues("bogus").Inc()
+
+			// DNSSEC downgrade detection
+			if p.cfg.DNSSECDowngrade.Enabled {
+				if p.dnssecDowngrade.RecordValidation(queryDomain, false) {
+					metrics.DNSSECDowngradeAlerts.WithLabelValues(queryDomain).Inc()
+					p.alerts.Send(alerts.Alert{
+						Type:     "dnssec_downgrade",
+						Severity: "critical",
+						Source:   clientIP,
+						Domain:   queryDomain,
+						Message:  fmt.Sprintf("DNSSEC downgrade suspected: %s (previously validating, now failing)", queryDomain),
+						Time:     startTime,
+					})
+				}
+			} else {
+				p.dnssecDowngrade.RecordValidation(queryDomain, false)
+			}
+
 			p.alerts.Send(alerts.Alert{
 				Type:     "dnssec_validation_fail",
 				Severity: "critical",
@@ -263,6 +593,9 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 			return
 		}
 		metrics.DNSSECValidations.WithLabelValues("valid").Inc()
+		if p.cfg.DNSSECDowngrade.Enabled {
+			p.dnssecDowngrade.RecordValidation(queryDomain, true)
+		}
 	}
 
 	// 10. DNS rebinding protection

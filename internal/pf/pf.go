@@ -13,9 +13,12 @@ import (
 // Manager handles macOS PF (Packet Filter) firewall integration.
 // PF is used to redirect DNS traffic from port 53 to the local
 // Castiel proxy port, enabling transparent interception.
+// It also blocks direct DoH/DoT connections to known public resolvers
+// to prevent DNS traffic from bypassing Castiel.
 type Manager struct {
 	cfg        config.PFConfig
 	anchorName string
+	dohIPs     []string // known DoH resolver IPs to block
 }
 
 func NewManager(cfg config.PFConfig) (*Manager, error) {
@@ -27,6 +30,7 @@ func NewManager(cfg config.PFConfig) (*Manager, error) {
 	return &Manager{
 		cfg:        cfg,
 		anchorName: cfg.AnchorName,
+		dohIPs:     defaultDoHResolverIPs(),
 	}, nil
 }
 
@@ -73,7 +77,46 @@ func (m *Manager) generateRules() string {
 		m.cfg.Interface, m.cfg.RedirectPort,
 	))
 
+	// Block direct DoH (port 443) and DoT (port 853) to known public resolvers
+	// This prevents applications from bypassing Castiel via encrypted DNS
+	for _, ip := range m.dohIPs {
+		sb.WriteString(fmt.Sprintf(
+			"block out quick on %s inet proto tcp from any to %s port { 443, 853 }\n",
+			m.cfg.Interface, ip,
+		))
+	}
+
 	return sb.String()
+}
+
+// defaultDoHResolverIPs returns the list of known public DoH/DoT resolver IPs
+// that should be blocked to prevent DNS traffic from bypassing Castiel.
+func defaultDoHResolverIPs() []string {
+	return []string{
+		"8.8.8.8",       // Google Public DNS
+		"8.8.4.4",       // Google Public DNS
+		"1.1.1.1",       // Cloudflare
+		"1.0.0.1",       // Cloudflare
+		"9.9.9.9",       // Quad9
+		"149.112.112.112", // Quad9
+		"94.140.14.14",  // AdGuard
+		"94.140.15.15",  // AdGuard
+		"208.67.222.222", // OpenDNS
+		"208.67.220.220", // OpenDNS
+		"45.90.28.0",    // NextDNS
+		"45.90.30.0",    // NextDNS
+		"76.76.2.0",     // ControlD
+		"76.76.10.0",    // ControlD
+		"194.242.2.2",   // Mullvad
+		"194.242.2.3",   // Mullvad
+		"185.222.222.222", // DNS.SB
+		"45.11.45.11",   // DNS.SB
+	}
+}
+
+// AddDoHBlockIP adds an additional DoH resolver IP to the block list.
+func (m *Manager) AddDoHBlockIP(ip string) {
+	m.dohIPs = append(m.dohIPs, ip)
 }
 
 // Cleanup removes the PF anchor and rules.

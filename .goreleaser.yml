@@ -1,0 +1,70 @@
+version: 2
+
+project_name: castiel
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: castiel
+    main: .
+    binary: castiel
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - darwin_arm64
+      - darwin_amd64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+  - id: attack-sim
+    main: ./cmd/attack-sim/
+    binary: attack-sim
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - darwin_arm64
+      - darwin_amd64
+    ldflags:
+      - -s -w
+
+archives:
+  - ids: [castiel]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Arch "arm64" }}apple-silicon
+      {{- else if eq .Arch "amd64" }}intel
+      {{- end }}
+    files:
+      - config.yaml
+      - data/*
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+homebrew_casks:
+  - repository:
+      owner: aimarketingflow
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/aimarketingflow/castiel-dns-defender"
+    description: "Real-time DNS attack detection, prevention, and alerting"
+    license: "Apache-2.0"
+    binaries:
+      - castiel
+      - attack-sim
+    caveats: "Castiel requires root to set up PF firewall redirect. Run: sudo castiel -config /usr/local/etc/castiel/config.yaml"

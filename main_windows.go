@@ -21,11 +21,21 @@ func initFirewall(cfg *config.Config) firewall.Manager {
 		return nil
 	}
 
+	// Add custom DoH bypass IPs from config
+	if cfg.DoHBypass.Enabled {
+		for _, ip := range cfg.DoHBypass.BlockIPs {
+			mgr.AddDoHBlockIP(ip)
+		}
+	}
+
 	if err := mgr.InstallRedirect(); err != nil {
 		log.Printf("WARNING: DNS redirect install failed: %v", err)
 		return nil
 	}
 
 	log.Printf("DNS redirect: method=%s port=%d", cfg.DnsRedirect.Method, cfg.DnsRedirect.RedirectPort)
+	if cfg.DoHBypass.Enabled {
+		log.Printf("DoH bypass: blocking direct DoH/DoT to known public resolvers via Windows Firewall")
+	}
 	return mgr
 }

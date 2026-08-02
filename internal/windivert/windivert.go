@@ -27,6 +27,7 @@ import (
 type Manager struct {
 	cfg          config.DnsRedirectConfig
 	originalDNS  map[string][]string // interface -> DNS servers (for restore)
+	dohIPs       []string           // known DoH resolver IPs to block
 }
 
 // NewManager creates a new Windows DNS redirect manager.
@@ -34,11 +35,15 @@ func NewManager(cfg config.DnsRedirectConfig) (*Manager, error) {
 	return &Manager{
 		cfg:         cfg,
 		originalDNS: make(map[string][]string),
+		dohIPs:      defaultDoHResolverIPs(),
 	}, nil
 }
 
 // InstallRedirect configures DNS redirection based on the configured method.
 func (m *Manager) InstallRedirect() error {
+	// Block DoH/DoT bypass to known public resolvers via Windows Firewall
+	m.installDoHBlocks()
+
 	switch m.cfg.Method {
 	case "portproxy":
 		return m.installPortProxy()
@@ -108,6 +113,7 @@ func (m *Manager) installPortProxy() error {
 func (m *Manager) Cleanup() {
 	m.cleanupSystemDNS()
 	m.cleanupPortProxy()
+	m.cleanupDoHBlocks()
 }
 
 func (m *Manager) cleanupSystemDNS() {
@@ -222,6 +228,68 @@ func isValidIPv4(s string) bool {
 		}
 	}
 	return true
+}
+
+// installDoHBlocks blocks outbound TCP to known DoH/DoT resolver IPs
+// on ports 443 and 853 using Windows Firewall (netsh advfirewall).
+func (m *Manager) installDoHBlocks() {
+	for _, ip := range m.dohIPs {
+		for _, dport := range []string{"443", "853"} {
+			ruleName := fmt.Sprintf("Castiel-BlockDoH-%s-%s", ip, dport)
+			// Check if rule already exists, then add it
+			check := exec.Command("netsh", "advfirewall", "firewall", "show", "rule",
+				fmt.Sprintf("name=%s", ruleName))
+			if check.Run() != nil {
+				exec.Command("netsh", "advfirewall", "firewall", "add", "rule",
+					fmt.Sprintf("name=%s", ruleName),
+					"dir=out", "action=block",
+					fmt.Sprintf("remoteip=%s", ip),
+					"protocol=tcp",
+					fmt.Sprintf("remoteport=%s", dport)).Run()
+			}
+		}
+	}
+}
+
+// cleanupDoHBlocks removes all Castiel DoH block rules from Windows Firewall.
+func (m *Manager) cleanupDoHBlocks() {
+	for _, ip := range m.dohIPs {
+		for _, dport := range []string{"443", "853"} {
+			ruleName := fmt.Sprintf("Castiel-BlockDoH-%s-%s", ip, dport)
+			exec.Command("netsh", "advfirewall", "firewall", "delete", "rule",
+				fmt.Sprintf("name=%s", ruleName)).Run()
+		}
+	}
+}
+
+// defaultDoHResolverIPs returns the list of known public DoH/DoT resolver IPs
+// that should be blocked to prevent DNS traffic from bypassing Castiel.
+func defaultDoHResolverIPs() []string {
+	return []string{
+		"8.8.8.8",         // Google Public DNS
+		"8.8.4.4",         // Google Public DNS
+		"1.1.1.1",         // Cloudflare
+		"1.0.0.1",         // Cloudflare
+		"9.9.9.9",         // Quad9
+		"149.112.112.112", // Quad9
+		"94.140.14.14",    // AdGuard
+		"94.140.15.15",    // AdGuard
+		"208.67.222.222",  // OpenDNS
+		"208.67.220.220",  // OpenDNS
+		"45.90.28.0",      // NextDNS
+		"45.90.30.0",      // NextDNS
+		"76.76.2.0",       // ControlD
+		"76.76.10.0",      // ControlD
+		"194.242.2.2",     // Mullvad
+		"194.242.2.3",     // Mullvad
+		"185.222.222.222", // DNS.SB
+		"45.11.45.11",     // DNS.SB
+	}
+}
+
+// AddDoHBlockIP adds an additional DoH resolver IP to the block list.
+func (m *Manager) AddDoHBlockIP(ip string) {
+	m.dohIPs = append(m.dohIPs, ip)
 }
 
 // Backend returns the active redirect method name.

@@ -21,6 +21,17 @@ type Config struct {
 	Nft                 NftConfig                 `yaml:"nft"`
 	DnsRedirect         DnsRedirectConfig         `yaml:"dns_redirect"`
 	Cache               CacheConfig               `yaml:"cache"`
+	EDNSInspection      EDNSInspectionConfig      `yaml:"edns_inspection"`
+	NXDomainTracking    NXDomainTrackingConfig    `yaml:"nxdomain_tracking"`
+	DNSSECDowngrade     DNSSECDowngradeConfig     `yaml:"dnssec_downgrade"`
+	DoHBypass           DoHBypassConfig           `yaml:"doh_bypass"`
+	ResponseValidation  ResponseValidationConfig  `yaml:"response_validation"`
+	DictionaryDGA      DictionaryDGAConfig      `yaml:"dictionary_dga"`
+	SparseDGA          SparseDGAConfig          `yaml:"sparse_dga"`
+	CNAMEValidation    CNAMEValidationConfig    `yaml:"cname_validation"`
+	DNSCalculation     DNSCalculationConfig     `yaml:"dns_calculation"`
+	LowSlowExfil       LowSlowExfilConfig       `yaml:"low_slow_exfil"`
+	LookalikeDetection LookalikeConfig          `yaml:"lookalike_detection"`
 }
 
 type ServerConfig struct {
@@ -156,6 +167,87 @@ type CacheConfig struct {
 	MaxEntries  int  `yaml:"max_entries"`
 	DefaultTTL  int  `yaml:"default_ttl"`
 	NegativeTTL int  `yaml:"negative_ttl"`
+}
+
+// EDNSInspectionConfig configures EDNS0 option inspection for covert
+// data exfiltration detection (SiphonDNS-style attacks).
+type EDNSInspectionConfig struct {
+	Enabled          bool `yaml:"enabled"`
+	StripSuspicious  bool `yaml:"strip_suspicious"` // strip suspicious EDNS0 options before forwarding
+	MaxCookieLen     int  `yaml:"max_cookie_len"`  // max allowed DNS cookie length (default 8)
+	AlertOnUnknown   bool `yaml:"alert_on_unknown"` // alert on unknown EDNS0 option codes
+}
+
+// NXDomainTrackingConfig configures per-domain NXDOMAIN rate limiting
+// to detect distributed DNS water torture attacks.
+type NXDomainTrackingConfig struct {
+	Enabled    bool `yaml:"enabled"`
+	Threshold  int  `yaml:"threshold"`   // max NXDOMAINs per domain per window before alerting
+	WindowSecs int  `yaml:"window_secs"` // rolling window in seconds
+	BlockMode  bool `yaml:"block_mode"`  // block all queries to domain when threshold exceeded
+}
+
+// DNSSECDowngradeConfig configures DNSSEC downgrade attack detection.
+type DNSSECDowngradeConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// DoHBypassConfig configures detection of DNS traffic bypassing Castiel
+// via direct DoH/DoT connections to public resolvers.
+type DoHBypassConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	BlockIPs []string `yaml:"block_ips"` // additional DoH resolver IPs to block beyond the built-in list
+}
+
+// ResponseValidationConfig configures strict DNS response packet validation
+// to detect malformed packets (TUDOOR-style attacks).
+type ResponseValidationConfig struct {
+	Enabled          bool `yaml:"enabled"`
+	DropMalformed    bool `yaml:"drop_malformed"`    // drop responses that fail validation
+	BailiwickCheck   bool `yaml:"bailiwick_check"`   // enforce bailiwick checking on answer records
+	MaxEDNS0UDPSize  int  `yaml:"max_edns0_udp_size"` // max EDNS0 UDP payload size (default 1232, prevents fragmentation)
+}
+
+// DictionaryDGAConfig configures dictionary-based DGA detection.
+type DictionaryDGAConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	WordList string   `yaml:"word_list"` // path to word list file (optional, uses built-in if empty)
+}
+
+// SparseDGAConfig configures sparse/low-frequency DGA detection.
+type SparseDGAConfig struct {
+	Enabled          bool    `yaml:"enabled"`
+	NXDomainRatio    float64 `yaml:"nxdomain_ratio"`    // e.g., 0.6 = 60% NXDOMAIN threshold
+	MinQueries       int     `yaml:"min_queries"`      // minimum queries in 24h to trigger
+	MinUniqueDomains int     `yaml:"min_unique_domains"` // minimum unique domains to trigger
+	WindowHours      int     `yaml:"window_hours"`     // rolling window (default 24)
+}
+
+// CNAMEValidationConfig configures CNAME chain validation.
+type CNAMEValidationConfig struct {
+	Enabled     bool `yaml:"enabled"`
+	MaxDepth    int  `yaml:"max_depth"`     // max CNAME chain depth (default 10)
+	BlockLoops  bool `yaml:"block_loops"`   // block CNAME loops
+	BlockDangling bool `yaml:"block_dangling"` // block dangling CNAMEs
+}
+
+// DNSCalculationConfig configures DNS calculation attack detection (APT12-style).
+type DNSCalculationConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// LowSlowExfilConfig configures low-and-slow exfiltration detection.
+type LowSlowExfilConfig struct {
+	Enabled         bool `yaml:"enabled"`
+	MaxSubdomains   int   `yaml:"max_subdomains"`    // unique subdomain threshold (default 50)
+	BeaconThreshold float64 `yaml:"beacon_threshold"` // regularity score threshold (default 0.7)
+}
+
+// LookalikeConfig configures lookalike/typosquatting domain detection.
+type LookalikeConfig struct {
+	Enabled          bool     `yaml:"enabled"`
+	ProtectedDomains []string `yaml:"protected_domains"` // additional domains to protect beyond defaults
+	MaxLevenshtein   int      `yaml:"max_levenshtein"`   // max edit distance (default 2)
 }
 
 func (c *Config) Validate() error {

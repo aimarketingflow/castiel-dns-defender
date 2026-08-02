@@ -17,7 +17,7 @@ func TestGenerateRules(t *testing.T) {
 		Interface:    "en0",
 	}
 
-	m := &Manager{cfg: cfg, anchorName: cfg.AnchorName}
+	m := &Manager{cfg: cfg, anchorName: cfg.AnchorName, dohIPs: defaultDoHResolverIPs()}
 	rules := m.generateRules()
 
 	// Should contain IPv4 UDP redirect
@@ -49,7 +49,7 @@ func TestGenerateRulesDifferentInterface(t *testing.T) {
 		Interface:    "utun0",
 	}
 
-	m := &Manager{cfg: cfg, anchorName: cfg.AnchorName}
+	m := &Manager{cfg: cfg, anchorName: cfg.AnchorName, dohIPs: defaultDoHResolverIPs()}
 	rules := m.generateRules()
 
 	if !strings.Contains(rules, "on utun0") {
@@ -69,21 +69,39 @@ func TestGenerateRulesFormat(t *testing.T) {
 		Interface:    "en0",
 	}
 
-	m := &Manager{cfg: cfg, anchorName: cfg.AnchorName}
+	m := &Manager{cfg: cfg, anchorName: cfg.AnchorName, dohIPs: defaultDoHResolverIPs()}
 	rules := m.generateRules()
 
 	lines := strings.Split(strings.TrimSpace(rules), "\n")
 
-	// Should have exactly 4 rules (IPv4 UDP, IPv4 TCP, IPv6 UDP, IPv6 TCP)
-	if len(lines) != 4 {
-		t.Errorf("Expected 4 redirect rules, got %d", len(lines))
+	// Should have 4 redirect rules + DoH block rules for each known resolver IP
+	rdrCount := 0
+	blockCount := 0
+	for _, line := range lines {
+		if strings.HasPrefix(line, "rdr pass") {
+			rdrCount++
+		}
+		if strings.HasPrefix(line, "block out") {
+			blockCount++
+		}
+	}
+	if rdrCount != 4 {
+		t.Errorf("Expected 4 redirect rules, got %d", rdrCount)
+	}
+	if blockCount == 0 {
+		t.Error("Expected DoH block rules but found none")
 	}
 
-	// Each line should start with "rdr pass"
+	// Each rdr line should start with "rdr pass"
 	for i, line := range lines {
-		if !strings.HasPrefix(line, "rdr pass") {
+		if strings.HasPrefix(line, "rdr") && !strings.HasPrefix(line, "rdr pass") {
 			t.Errorf("Line %d should start with 'rdr pass', got: %s", i, line)
 		}
+	}
+
+	// Should contain block rule for known DoH IP (e.g., 8.8.8.8)
+	if !strings.Contains(rules, "block out quick on en0 inet proto tcp from any to 8.8.8.8 port { 443, 853 }") {
+		t.Error("Missing DoH block rule for 8.8.8.8")
 	}
 }
 

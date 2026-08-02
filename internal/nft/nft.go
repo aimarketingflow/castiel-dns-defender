@@ -15,9 +15,10 @@ import (
 // Castiel proxy port, enabling transparent interception.
 // Falls back to iptables if nftables is not available.
 type Manager struct {
-	cfg        config.NftConfig
-	tableName  string
+	cfg         config.NftConfig
+	tableName   string
 	useIptables bool
+	dohIPs      []string // known DoH resolver IPs to block
 }
 
 // NewManager creates a new nftables (or iptables fallback) manager.
@@ -25,6 +26,7 @@ func NewManager(cfg config.NftConfig) (*Manager, error) {
 	m := &Manager{
 		cfg:       cfg,
 		tableName: "castiel",
+		dohIPs:    defaultDoHResolverIPs(),
 	}
 
 	// Determine backend: try nftables first, fall back to iptables
@@ -72,7 +74,7 @@ func (m *Manager) generateNftRules() string {
 	var sb strings.Builder
 	port := m.cfg.RedirectPort
 
-	// IPv4 table
+	// IPv4 table with NAT prerouting + output chains
 	sb.WriteString(fmt.Sprintf("table ip %s {\n", m.tableName))
 	sb.WriteString("    chain prerouting {\n")
 	sb.WriteString("        type nat hook prerouting priority -100; policy accept;\n")
@@ -84,6 +86,15 @@ func (m *Manager) generateNftRules() string {
 		sb.WriteString(fmt.Sprintf("        tcp dport 53 redirect to :%d\n", port))
 	}
 	sb.WriteString("    }\n")
+	sb.WriteString("    chain output {\n")
+	sb.WriteString("        type nat hook output priority -100; policy accept;\n")
+	sb.WriteString(fmt.Sprintf("        udp dport 53 redirect to :%d\n", port))
+	sb.WriteString(fmt.Sprintf("        tcp dport 53 redirect to :%d\n", port))
+	sb.WriteString("    }\n")
+	// DoH/DoT bypass blocking
+	for _, ip := range m.dohIPs {
+		sb.WriteString(fmt.Sprintf("    ip daddr %s tcp dport { 443, 853 } drop\n", ip))
+	}
 	sb.WriteString("}\n")
 
 	// IPv6 table
@@ -105,39 +116,38 @@ func (m *Manager) generateNftRules() string {
 
 func (m *Manager) installIptables() error {
 	port := fmt.Sprintf("%d", m.cfg.RedirectPort)
-	ifaceFlag := ""
-	if m.cfg.Interface != "" {
-		ifaceFlag = fmt.Sprintf("-i %s", m.cfg.Interface)
-	}
 
-	// IPv4 rules
-	rules := [][]string{
-		{"iptables", "-t", "nat", "-C", "OUTPUT", ifaceFlag, "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", port},
-	}
-	// Check if rule exists, if not add it
-	for _, check := range rules {
-		checkCmd := exec.Command(check[0], check[1:]...)
-		if checkCmd.Run() != nil {
-			// Rule doesn't exist, add it
-			addArgs := []string{"-t", "nat", "-A", "OUTPUT", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", port}
-			if m.cfg.Interface != "" {
-				addArgs = append([]string{"-i", m.cfg.Interface}, addArgs...)
-			}
-			if err := exec.Command("iptables", addArgs...).Run(); err != nil {
-				return fmt.Errorf("iptables UDP redirect: %w", err)
-			}
+	// IPv4 UDP redirect
+	udpCheck := exec.Command("iptables", "-t", "nat", "-C", "OUTPUT", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", port)
+	if udpCheck.Run() != nil {
+		udpArgs := []string{"-t", "nat", "-A", "OUTPUT", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", port}
+		if m.cfg.Interface != "" {
+			udpArgs = append([]string{"-i", m.cfg.Interface}, udpArgs...)
+		}
+		if err := exec.Command("iptables", udpArgs...).Run(); err != nil {
+			return fmt.Errorf("iptables UDP redirect: %w", err)
 		}
 	}
 
-	// TCP
+	// IPv4 TCP redirect
 	tcpCheck := exec.Command("iptables", "-t", "nat", "-C", "OUTPUT", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-port", port)
 	if tcpCheck.Run() != nil {
 		tcpArgs := []string{"-t", "nat", "-A", "OUTPUT", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-port", port}
-		if m.cfg.Interface != "" {
+			if m.cfg.Interface != "" {
 			tcpArgs = append([]string{"-i", m.cfg.Interface}, tcpArgs...)
 		}
 		if err := exec.Command("iptables", tcpArgs...).Run(); err != nil {
 			return fmt.Errorf("iptables TCP redirect: %w", err)
+		}
+	}
+
+	// DoH/DoT bypass blocking (iptables)
+	for _, ip := range m.dohIPs {
+		for _, dport := range []string{"443", "853"} {
+			check := exec.Command("iptables", "-C", "OUTPUT", "-d", ip, "-p", "tcp", "--dport", dport, "-j", "DROP")
+			if check.Run() != nil {
+				exec.Command("iptables", "-A", "OUTPUT", "-d", ip, "-p", "tcp", "--dport", dport, "-j", "DROP").Run()
+			}
 		}
 	}
 
@@ -180,15 +190,52 @@ func (m *Manager) Cleanup() {
 func (m *Manager) cleanupIptables() {
 	port := fmt.Sprintf("%d", m.cfg.RedirectPort)
 
-	// Remove iptables rules (best-effort)
+	// Remove iptables redirect rules (best-effort)
 	exec.Command("iptables", "-t", "nat", "-D", "OUTPUT", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", port).Run()
 	exec.Command("iptables", "-t", "nat", "-D", "OUTPUT", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-port", port).Run()
+
+	// Remove DoH/DoT block rules
+	for _, ip := range m.dohIPs {
+		for _, dport := range []string{"443", "853"} {
+			exec.Command("iptables", "-D", "OUTPUT", "-d", ip, "-p", "tcp", "--dport", dport, "-j", "DROP").Run()
+		}
+	}
 
 	// IPv6
 	if _, err := exec.LookPath("ip6tables"); err == nil {
 		exec.Command("ip6tables", "-t", "nat", "-D", "OUTPUT", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", port).Run()
 		exec.Command("ip6tables", "-t", "nat", "-D", "OUTPUT", "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-port", port).Run()
 	}
+}
+
+// defaultDoHResolverIPs returns the list of known public DoH/DoT resolver IPs
+// that should be blocked to prevent DNS traffic from bypassing Castiel.
+func defaultDoHResolverIPs() []string {
+	return []string{
+		"8.8.8.8",         // Google Public DNS
+		"8.8.4.4",         // Google Public DNS
+		"1.1.1.1",         // Cloudflare
+		"1.0.0.1",         // Cloudflare
+		"9.9.9.9",         // Quad9
+		"149.112.112.112", // Quad9
+		"94.140.14.14",    // AdGuard
+		"94.140.15.15",    // AdGuard
+		"208.67.222.222",  // OpenDNS
+		"208.67.220.220",  // OpenDNS
+		"45.90.28.0",      // NextDNS
+		"45.90.30.0",      // NextDNS
+		"76.76.2.0",       // ControlD
+		"76.76.10.0",      // ControlD
+		"194.242.2.2",     // Mullvad
+		"194.242.2.3",     // Mullvad
+		"185.222.222.222", // DNS.SB
+		"45.11.45.11",     // DNS.SB
+	}
+}
+
+// AddDoHBlockIP adds an additional DoH resolver IP to the block list.
+func (m *Manager) AddDoHBlockIP(ip string) {
+	m.dohIPs = append(m.dohIPs, ip)
 }
 
 // Backend returns the active firewall backend name ("nftables" or "iptables").

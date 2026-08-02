@@ -11,72 +11,141 @@ import (
 
 var (
 	TotalQueries = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "dad_total_queries",
+		Name: "castiel_total_queries_total",
 		Help: "Total DNS queries received",
 	})
 
 	CacheHits = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "dad_cache_hits",
+		Name: "castiel_cache_hits_total",
 		Help: "DNS cache hits",
 	})
 
 	CacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "dad_cache_misses",
+		Name: "castiel_cache_misses_total",
 		Help: "DNS cache misses",
 	})
 
 	RateLimitedQueries = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "dad_rate_limited_queries",
+		Name: "castiel_rate_limited_queries_total",
 		Help: "Queries dropped or truncated by rate limiter",
 	})
 
 	BlockedQueries = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "dad_blocked_queries",
+		Name: "castiel_blocked_queries_total",
 		Help: "Queries blocked by detection engine",
 	}, []string{"reason"})
 
 	QueryDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "dad_query_duration_seconds",
+		Name:    "castiel_query_duration_seconds",
 		Help:    "DNS query processing duration",
 		Buckets: prometheus.DefBuckets,
 	})
 
 	DoHQueries = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "dad_doh_queries_total",
+		Name: "castiel_doh_queries_total",
 		Help: "Total queries forwarded over DoH",
 	})
 
 	DoHFailures = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "dad_doh_failures_total",
+		Name: "castiel_doh_failures_total",
 		Help: "DoH query failures (fallback to plain DNS)",
 	})
 
 	DoHEnabled = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "dad_doh_enabled",
+		Name: "castiel_doh_enabled",
 		Help: "1 if DoH is enabled, 0 if disabled",
 	})
 
 	DNSSECValidations = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "dad_dnssec_validations_total",
+		Name: "castiel_dnssec_validations_total",
 		Help: "DNSSEC validation results",
 	}, []string{"result"}) // result: valid, bogus, insecure, indeterminate
 
 	UpstreamFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "dad_upstream_failures_total",
+		Name: "castiel_upstream_failures_total",
 		Help: "Upstream DNS query failures",
 	}, []string{"upstream"})
 
 	ActiveConnections = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "dad_active_connections",
+		Name: "castiel_active_connections",
 		Help: "Currently active DNS client connections",
 	})
+
+	EDNSSuspicious = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_edns_suspicious_total",
+		Help: "Suspicious EDNS0 options detected",
+	}, []string{"type"})
+
+	NXDomainPerDomain = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_nxdomain_per_domain_total",
+		Help: "NXDOMAIN responses tracked per apex domain",
+	}, []string{"domain"})
+
+	NXDomainWaterTorture = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_nxdomain_water_torture_total",
+		Help: "DNS water torture attacks detected per domain",
+	}, []string{"domain"})
+
+	DNSSECDowngradeAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_dnssec_downgrade_alerts_total",
+		Help: "DNSSEC downgrade attempts detected",
+	}, []string{"domain"})
+
+	DoHBypassAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_doh_bypass_alerts_total",
+		Help: "DoH bypass attempts detected",
+	}, []string{"resolver"})
+
+	ResponseValidationFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_response_validation_failures_total",
+		Help: "DNS response packets that failed validation",
+	}, []string{"field"})
+
+	FastFluxAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_fastflux_alerts_total",
+		Help: "Fast-flux/C2 detection alerts",
+	}, []string{"reason"})
+
+	DictionaryDGAAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_dictionary_dga_alerts_total",
+		Help: "Dictionary-based DGA domains detected",
+	}, []string{"domain"})
+
+	SparseDGAAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_sparse_dga_alerts_total",
+		Help: "Sparse DGA detection alerts",
+	}, []string{"client_ip"})
+
+	CNAMEChainAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_cname_chain_alerts_total",
+		Help: "CNAME chain validation alerts",
+	}, []string{"type"})
+
+	DNSCalculationAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_dns_calculation_alerts_total",
+		Help: "DNS calculation attack detections",
+	}, []string{"reason"})
+
+	LowSlowExfilAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_low_slow_exfil_alerts_total",
+		Help: "Low-and-slow exfiltration detections",
+	}, []string{"reason"})
+
+	LookalikeAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_lookalike_alerts_total",
+		Help: "Lookalike/typosquatting domain detections",
+	}, []string{"reason"})
 )
 
 func init() {
 	prometheus.MustRegister(TotalQueries, CacheHits, CacheMisses,
 		RateLimitedQueries, BlockedQueries, QueryDuration,
 		DoHQueries, DoHFailures, DoHEnabled,
-		DNSSECValidations, UpstreamFailures, ActiveConnections)
+		DNSSECValidations, UpstreamFailures, ActiveConnections,
+		EDNSSuspicious, NXDomainPerDomain, NXDomainWaterTorture,
+		DNSSECDowngradeAlerts, DoHBypassAlerts, ResponseValidationFailures,
+		FastFluxAlerts, DictionaryDGAAlerts, SparseDGAAlerts,
+		CNAMEChainAlerts, DNSCalculationAlerts, LowSlowExfilAlerts, LookalikeAlerts)
 }
 
 type Server struct {

@@ -10,6 +10,10 @@ type Manager interface {
 	// to the local Castiel proxy port.
 	InstallRedirect() error
 
+	// AddDoHBlockIP adds a DoH/DoT resolver IP to the block list,
+	// preventing DNS traffic from bypassing Castiel via encrypted DNS.
+	AddDoHBlockIP(ip string)
+
 	// Cleanup removes all redirect rules and restores normal DNS routing.
 	Cleanup()
 }

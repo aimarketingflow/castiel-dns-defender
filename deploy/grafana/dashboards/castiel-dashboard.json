@@ -50,7 +50,7 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "rate(dad_total_queries[5m])",
+          "expr": "rate(castiel_total_queries[5m])",
           "refId": "A"
         }
       ],
@@ -90,7 +90,7 @@
       },
       "targets": [
         {
-          "expr": "rate(dad_cache_hits[5m]) / (rate(dad_cache_hits[5m]) + rate(dad_cache_misses[5m])) * 100",
+          "expr": "rate(castiel_cache_hits[5m]) / (rate(castiel_cache_hits[5m]) + rate(castiel_cache_misses[5m])) * 100",
           "refId": "A"
         }
       ],
@@ -128,7 +128,7 @@
       },
       "targets": [
         {
-          "expr": "rate(dad_blocked_queries[5m]) * 60",
+          "expr": "rate(castiel_blocked_queries[5m]) * 60",
           "refId": "A"
         }
       ],
@@ -166,7 +166,7 @@
       },
       "targets": [
         {
-          "expr": "rate(dad_rate_limited_queries[5m]) * 60",
+          "expr": "rate(castiel_rate_limited_queries[5m]) * 60",
           "refId": "A"
         }
       ],
@@ -203,22 +203,22 @@
       },
       "targets": [
         {
-          "expr": "rate(dad_total_queries[1m])",
+          "expr": "rate(castiel_total_queries[1m])",
           "legendFormat": "Total",
           "refId": "A"
         },
         {
-          "expr": "rate(dad_doh_queries_total[1m])",
+          "expr": "rate(castiel_doh_queries_total[1m])",
           "legendFormat": "DoH",
           "refId": "B"
         },
         {
-          "expr": "rate(dad_blocked_queries[1m])",
+          "expr": "rate(castiel_blocked_queries[1m])",
           "legendFormat": "Blocked",
           "refId": "C"
         },
         {
-          "expr": "rate(dad_rate_limited_queries[1m])",
+          "expr": "rate(castiel_rate_limited_queries[1m])",
           "legendFormat": "Rate Limited",
           "refId": "D"
         }
@@ -256,17 +256,17 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, rate(dad_query_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, rate(castiel_query_duration_seconds_bucket[5m]))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, rate(dad_query_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(castiel_query_duration_seconds_bucket[5m]))",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, rate(dad_query_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, rate(castiel_query_duration_seconds_bucket[5m]))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -303,7 +303,7 @@
       },
       "targets": [
         {
-          "expr": "dad_doh_enabled",
+          "expr": "castiel_doh_enabled",
           "refId": "A"
         }
       ],
@@ -337,7 +337,7 @@
       },
       "targets": [
         {
-          "expr": "dad_doh_failures_total",
+          "expr": "castiel_doh_failures_total",
           "refId": "A"
         }
       ],
@@ -371,7 +371,7 @@
       },
       "targets": [
         {
-          "expr": "dad_doh_queries_total",
+          "expr": "castiel_doh_queries_total",
           "refId": "A"
         }
       ],
@@ -397,7 +397,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (reason) (dad_blocked_queries)",
+          "expr": "sum by (reason) (castiel_blocked_queries)",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
@@ -424,7 +424,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (result) (dad_dnssec_validations_total)",
+          "expr": "sum by (result) (castiel_dnssec_validations_total)",
           "legendFormat": "{{result}}",
           "refId": "A"
         }
@@ -462,7 +462,7 @@
       },
       "targets": [
         {
-          "expr": "rate(dad_query_duration_seconds_bucket[5m])",
+          "expr": "rate(castiel_query_duration_seconds_bucket[5m])",
           "legendFormat": "{{le}}",
           "refId": "A"
         }
@@ -480,7 +480,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (upstream) (dad_upstream_failures_total)",
+          "expr": "sum by (upstream) (castiel_upstream_failures_total)",
           "format": "table",
           "refId": "A"
         }
@@ -492,13 +492,13 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["dns", "security", "dad"],
+  "tags": ["dns", "security", "castiel"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "",
-  "title": "DNS Attack Defender",
-  "uid": "dns-attack-defender",
+  "title": "Castiel",
+  "uid": "castiel",
   "version": 1,
   "weekStart": ""
 }

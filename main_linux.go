@@ -21,6 +21,13 @@ func initFirewall(cfg *config.Config) firewall.Manager {
 		return nil
 	}
 
+	// Add custom DoH bypass IPs from config
+	if cfg.DoHBypass.Enabled {
+		for _, ip := range cfg.DoHBypass.BlockIPs {
+			mgr.AddDoHBlockIP(ip)
+		}
+	}
+
 	if err := mgr.InstallRedirect(); err != nil {
 		log.Printf("WARNING: %s redirect install failed: %v", mgr.Backend(), err)
 		return nil
@@ -31,5 +38,8 @@ func initFirewall(cfg *config.Config) firewall.Manager {
 		iface = "all interfaces"
 	}
 	log.Printf("%s redirect: DNS :53 -> :%d on %s", mgr.Backend(), cfg.Nft.RedirectPort, iface)
+	if cfg.DoHBypass.Enabled {
+		log.Printf("%s DoH bypass: blocking direct DoH/DoT to known public resolvers", mgr.Backend())
+	}
 	return mgr
 }

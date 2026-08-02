@@ -134,6 +134,94 @@ pf:
   # For network-wide: set interface to your active interface (e.g., en0)
   # and enable forwarding
 
+# EDNS0 option inspection (SiphonDNS defense)
+# Detects covert data exfiltration via EDNS Client Subnet, DNS cookies,
+# and unknown/custom EDNS0 option codes that bypass subdomain entropy detection.
+edns_inspection:
+  enabled: true
+  strip_suspicious: true      # Strip suspicious EDNS0 options before forwarding upstream
+  max_cookie_len: 8           # Max allowed DNS cookie length in bytes (RFC 7873: client cookie = 8)
+  alert_on_unknown: true      # Alert on unknown/custom EDNS0 option codes
+
+# Per-domain NXDOMAIN tracking (DNS water torture defense)
+# Tracks NXDOMAIN response rates per apex domain to detect distributed
+# water torture attacks that bypass per-IP rate limiting.
+nxdomain_tracking:
+  enabled: true
+  threshold: 100              # Max NXDOMAINs per apex domain per window before alerting
+  window_secs: 60             # Rolling window in seconds
+  block_mode: true            # Block all queries to domain when threshold exceeded
+
+# DNSSEC downgrade detection
+# Alerts when a previously-validating domain suddenly starts failing
+# DNSSEC validation, indicating a possible DNSSEC stripping or downgrade attack.
+dnssec_downgrade:
+  enabled: true
+
+# DoH bypass detection
+# Detects DNS traffic bypassing Castiel via direct DoH/DoT connections
+# to public resolvers (Google, Cloudflare, Quad9, etc.) over HTTPS.
+doh_bypass:
+  enabled: true
+  block_ips: []               # Additional DoH resolver IPs to watch (beyond built-in list)
+
+# Response packet validation (TUDOOR defense)
+# Strict validation of DNS response packets to detect malformed packets
+# that could exploit pre-processing logic vulnerabilities.
+response_validation:
+  enabled: true
+  drop_malformed: true        # Drop responses that fail validation
+  bailiwick_check: true       # Enforce bailiwick checking on answer records
+  max_edns0_udp_size: 1232    # Max EDNS0 UDP payload size (prevents IP fragmentation attacks)
+
+# Dictionary DGA detection (Matsnu/Suppobox/Gabiya-style)
+# Detects DGA domains composed of concatenated dictionary words
+# that bypass entropy-based detection.
+dictionary_dga:
+  enabled: true
+  word_list: ""               # Path to custom word list file (empty = built-in list)
+
+# Sparse DGA detection (Ramdo/Ramnit/Virut-style)
+# Detects low-frequency DGA domains by tracking NXDOMAIN ratio per client
+# over a 24-hour rolling window.
+sparse_dga:
+  enabled: true
+  nxdomain_ratio: 0.6         # NXDOMAIN ratio threshold (60%)
+  min_queries: 20             # Minimum queries in 24h to trigger
+  min_unique_domains: 10      # Minimum unique domains to trigger
+  window_hours: 24            # Rolling window in hours
+
+# CNAME chain validation
+# Detects dangling CNAMEs, CNAME loops, excessive chain depth,
+# and cross-bailiwick CNAME redirections.
+cname_validation:
+  enabled: true
+  max_depth: 10               # Maximum CNAME chain depth
+  block_loops: true           # Block CNAME loops
+  block_dangling: true        # Block dangling CNAMEs (CNAME to NXDOMAIN)
+
+# DNS calculation detection (APT12-style)
+# Detects DNS responses where IP addresses encode command data
+# (sequential octets, encoded data patterns, non-routable IPs for public domains).
+dns_calculation:
+  enabled: true
+
+# Low-and-slow exfiltration detection (FrameworkPOS-style)
+# Analyzes domain behavior over 24h+ to detect beaconing,
+# high subdomain diversity, and gradual data accumulation.
+low_slow_exfil:
+  enabled: true
+  max_subdomains: 50          # Unique subdomain threshold per apex in 24h
+  beacon_threshold: 0.7       # Regularity score threshold (0-1, higher = more regular)
+
+# Lookalike domain detection (typosquatting/homoglyph)
+# Detects domains that resemble protected brands using Levenshtein distance,
+# homoglyph substitution, hyphen insertion, and TLD swapping.
+lookalike_detection:
+  enabled: true
+  protected_domains: []       # Additional domains to protect beyond built-in defaults
+  max_levenshtein: 2          # Max edit distance for typosquatting detection
+
 # Cache
 cache:
   enabled: true
