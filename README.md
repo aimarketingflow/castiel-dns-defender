@@ -21,7 +21,7 @@ macOS · Linux · Windows · Raspberry Pi
 
 Castiel is a cross-platform DNS defense proxy that intercepts all DNS traffic via platform-native firewall redirection and passes every query through a 25+ detector pipeline before being forwarded upstream. It detects and blocks DNS-based attacks in real-time, including DGA domains, DNS tunneling, fast-flux C2, water torture, cache poisoning, DNS rebinding, lookalike domains, and more.
 
-> **Status:** macOS is fully tested and released. Linux (Raspberry Pi) and Windows builds compile and cross-compile cleanly but are not yet fully tested. See [Contributing](#contributing) if you'd like to help test those platforms.
+> **Status:** v1.0.0-beta — macOS is fully tested and released. Linux (Raspberry Pi) and Windows builds compile and cross-compile cleanly but are not yet fully tested. Please report issues via [GitHub Issues](https://github.com/aimarketingflow/castiel-dns-defender/issues). See [Contributing](#contributing) if you'd like to help test those platforms.
 
 ### Why Castiel?
 
