@@ -1,10 +1,10 @@
 # Build artifacts
-castiel
-castiel.exe
-castiel-arm64
-castiel-arm64.exe
-attack-sim
-attack-sim.exe
+/castiel
+/castiel.exe
+/castiel-arm64
+/castiel-arm64.exe
+/attack-sim
+/attack-sim.exe
 linux_build/castiel
 linux_build/castiel-arm64
 windows_build/castiel.exe
