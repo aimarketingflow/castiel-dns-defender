@@ -69,11 +69,16 @@ class DaemonManager: ObservableObject {
         ].compactMap { $0 }
 
         // Search for the binary
+        // Exclude the app's own executable (Contents/MacOS/Castiel) — macOS is
+        // case-insensitive so "castiel" matches "Castiel"
+        let ownExecutable = Bundle.main.executablePath ?? ""
         let possiblePaths = searchRoots.flatMap { root in
             ["\(root)/castiel", "\(root)/bin/castiel", "\(root)/../castiel"]
         } + ["/usr/local/bin/castiel", "/opt/castiel/castiel"]
 
         if let found = possiblePaths.first(where: { path in
+            // Skip the app's own executable
+            if path.lowercased() == ownExecutable.lowercased() { return false }
             var isDir: ObjCBool = false
             return FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
                 && !isDir.boolValue
@@ -174,6 +179,29 @@ class DaemonManager: ObservableObject {
         pasteboard.setString(logText, forType: .string)
     }
 
+    // MARK: - Daemon Discovery
+
+    /// Find the PID of an already-running castiel daemon (e.g. started by LaunchDaemon).
+    private func findDaemonPID() -> Int32 {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        proc.arguments = ["-x", "castiel"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let firstLine = output.components(separatedBy: "\n").first,
+               let foundPid = Int32(firstLine), foundPid > 0 {
+                return foundPid
+            }
+        } catch {}
+        return 0
+    }
+
     // MARK: - Daemon Lifecycle
 
     func start() {
@@ -205,9 +233,17 @@ class DaemonManager: ObservableObject {
             _ = semaphore.wait(timeout: .now() + 3)
             if alreadyRunning {
                 addLog(.info, "Daemon already running on 127.0.0.1:9090 (e.g. via LaunchDaemon)")
-                addLog(.info, "Attaching to existing daemon — no new process needed")
+                // Find the PID of the running daemon so we can send signals (DoH toggle)
+                let foundPid = self.findDaemonPID()
+                if foundPid > 0 {
+                    addLog(.info, "Attached to existing daemon (PID: \(foundPid))")
+                } else {
+                    addLog(.warn, "Could not find daemon PID — DoH toggle may not work")
+                }
                 DispatchQueue.main.async {
                     self.status = .running
+                    self.pid = foundPid
+                    self.dohStatus = .enabled
                     self.lastError = nil
                 }
                 return
