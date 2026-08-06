@@ -32,6 +32,8 @@ type Config struct {
 	DNSCalculation     DNSCalculationConfig     `yaml:"dns_calculation"`
 	LowSlowExfil       LowSlowExfilConfig       `yaml:"low_slow_exfil"`
 	LookalikeDetection LookalikeConfig          `yaml:"lookalike_detection"`
+	EndpointMonitor    EndpointMonitorConfig    `yaml:"endpoint_monitor"`
+	PFGuard            PFGuardConfig            `yaml:"pf_guard"`
 }
 
 type ServerConfig struct {
@@ -248,6 +250,25 @@ type LookalikeConfig struct {
 	Enabled          bool     `yaml:"enabled"`
 	ProtectedDomains []string `yaml:"protected_domains"` // additional domains to protect beyond defaults
 	MaxLevenshtein   int      `yaml:"max_levenshtein"`   // max edit distance (default 2)
+}
+
+// EndpointMonitorConfig configures Apple endpoint health monitoring.
+// Periodically TCP-probes Apple's OCSP/CRL/notarization endpoints to detect
+// IP-level blocking (Phase 3 attack: PF rules blocking 17.0.0.0/8 on ports 80/443
+// to make trustd fail-open and bypass Gatekeeper revocation).
+type EndpointMonitorConfig struct {
+	Enabled        bool `yaml:"enabled"`
+	CheckInterval  int  `yaml:"check_interval"`   // seconds between checks (default 30)
+	ConnectTimeout int  `yaml:"connect_timeout"`  // TCP connect timeout in seconds (default 3)
+}
+
+// PFGuardConfig configures PF rules integrity monitoring.
+// Scans PF rules for unauthorized block rules targeting Apple's IP ranges
+// or certificate validation ports (80/443).
+type PFGuardConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	CheckInterval int    `yaml:"check_interval"` // seconds between checks (default 30)
+	CastielAnchor string `yaml:"castiel_anchor"` // Castiel's own anchor name to exclude from scans
 }
 
 func (c *Config) Validate() error {

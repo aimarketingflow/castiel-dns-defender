@@ -135,6 +135,21 @@ var (
 		Name: "castiel_lookalike_alerts_total",
 		Help: "Lookalike/typosquatting domain detections",
 	}, []string{"reason"})
+
+	AppleEndpointUnreachable = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_apple_endpoint_unreachable_total",
+		Help: "Apple certificate validation endpoints that are unreachable (possible IP-level blocking)",
+	}, []string{"endpoint"})
+
+	AppleEndpointStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "castiel_apple_endpoint_status",
+		Help: "1 if Apple endpoint is reachable, 0 if unreachable",
+	}, []string{"endpoint"})
+
+	UnauthorizedPFAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_unauthorized_pf_alerts_total",
+		Help: "Unauthorized PF rules detected blocking Apple endpoints",
+	}, []string{"rule_type"})
 )
 
 func init() {
@@ -145,7 +160,8 @@ func init() {
 		EDNSSuspicious, NXDomainPerDomain, NXDomainWaterTorture,
 		DNSSECDowngradeAlerts, DoHBypassAlerts, ResponseValidationFailures,
 		FastFluxAlerts, DictionaryDGAAlerts, SparseDGAAlerts,
-		CNAMEChainAlerts, DNSCalculationAlerts, LowSlowExfilAlerts, LookalikeAlerts)
+		CNAMEChainAlerts, DNSCalculationAlerts, LowSlowExfilAlerts, LookalikeAlerts,
+		AppleEndpointUnreachable, AppleEndpointStatus, UnauthorizedPFAlerts)
 }
 
 type Server struct {

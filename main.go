@@ -11,7 +11,9 @@ import (
 	"github.com/castiel/dns/internal/blocklists"
 	"github.com/castiel/dns/internal/config"
 	"github.com/castiel/dns/internal/dnsproxy"
+	"github.com/castiel/dns/internal/endpointmonitor"
 	"github.com/castiel/dns/internal/metrics"
+	"github.com/castiel/dns/internal/pfguard"
 	"gopkg.in/yaml.v3"
 )
 
@@ -81,6 +83,18 @@ func runDaemon(ctx context.Context, configPath string) {
 
 	// Start DoH health checker (auto-disables DoH on failure, auto-re-enables when healthy)
 	proxy.StartDoHHealthChecker(ctx)
+
+	// Start Apple endpoint health monitor (detects Phase 3: IP-level OCSP blocking)
+	if cfg.EndpointMonitor.Enabled {
+		endpointMon := endpointmonitor.NewMonitor(cfg.EndpointMonitor, alertMgr)
+		go endpointMon.Start(ctx)
+	}
+
+	// Start PF rules integrity guard (detects unauthorized PF rules blocking Apple endpoints)
+	if cfg.PFGuard.Enabled {
+		pfGuard := pfguard.NewGuard(cfg.PFGuard, alertMgr)
+		go pfGuard.Start(ctx)
+	}
 
 	log.Printf("DNS proxy listening on %s:%d", cfg.Server.ListenAddr, cfg.Server.ListenPort)
 	log.Printf("Upstream: %v (DoH: %v)", cfg.Server.Upstream, cfg.Server.UseDoH)
