@@ -98,6 +98,7 @@ func New(cfg *config.Config, bl *blocklists.Manager, am *alerts.Manager) (*Proxy
 	// Initialize DoH client if enabled
 	if cfg.Server.UseDoH && cfg.Server.DoHUpstream != "" {
 		p.dohClient = NewDoHClient(cfg.Server.DoHUpstream, cfg.Server.TimeoutDuration())
+		metrics.DoHEnabled.Set(1)
 		log.Printf("DoH client initialized: %s", cfg.Server.DoHUpstream)
 	}
 
@@ -626,6 +627,15 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (p *Proxy) forwardUpstream(r *dns.Msg) (*dns.Msg, error) {
+	// Set DNSSEC OK (DO) bit so upstreams return RRSIG records for validation
+	if p.cfg.DNSSEC.Enabled {
+		if opt := r.IsEdns0(); opt != nil {
+			opt.SetDo()
+		} else {
+			r.SetEdns0(4096, true)
+		}
+	}
+
 	// Try DoH first if enabled and healthy
 	if p.cfg.Server.UseDoH && p.dohClient != nil && p.dohClient.IsEnabled() {
 		resp, err := p.dohClient.Exchange(r)

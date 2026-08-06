@@ -161,10 +161,11 @@ func (v *Validator) validateChain(resp *dns.Msg, qname string) bool {
 	// Group answer records by type to find RRSIGs
 	rrsigSets := groupRRSIGs(resp.Answer)
 	if len(rrsigSets) == 0 {
-		// No RRSIG records in response — can't validate
-		// This means the zone is not signed (insecure) or upstream stripped signatures
-		log.Printf("DNSSEC: no RRSIG records in response for %s — zone may be insecure", qname)
-		return false
+		// No RRSIG records in response — zone is insecure (not signed) or
+		// upstream stripped signatures. Treat as INSECURE (valid), not BOGUS.
+		// Only reject responses with *invalid* signatures, not missing ones.
+		log.Printf("DNSSEC: no RRSIG records in response for %s — zone is insecure (accepted)", qname)
+		return true
 	}
 
 	// Validate each RRset with its RRSIG
