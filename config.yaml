@@ -228,3 +228,11 @@ cache:
   max_entries: 50000
   default_ttl: 300            # Default cache TTL in seconds
   negative_ttl: 60            # TTL for NXDOMAIN caching
+
+# Shadow Query — detects DNS poisoning on the local network even when DoH
+# protects the client. Sends a parallel query to the network resolver and
+# alerts if it returns a private IP for a public domain.
+shadow_query:
+  enabled: true
+  resolver: "192.168.2.1:53"  # Mac B bridge0 — the poisoned network path
+  timeout_ms: 2000
