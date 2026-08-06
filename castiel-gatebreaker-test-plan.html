@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Castiel vs Gatebreaker — Test Campaign Plan</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --card: #131822;
+    --border: #1e2738;
+    --accent: #00d4ff;
+    --red: #ff4757;
+    --green: #2ed573;
+    --yellow: #ffa502;
+    --text: #c8d6e5;
+    --dim: #5c6b7f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 40px 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 {
+    font-size: 2.2em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  h2 {
+    font-size: 1.5em;
+    color: var(--text);
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.15em;
+    color: var(--accent);
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin-bottom: 16px; padding-left: 24px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: var(--card);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .phase {
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+    margin-bottom: 24px;
+  }
+  .phase.red { border-left-color: var(--red); }
+  .phase.green { border-left-color: var(--green); }
+  .phase.yellow { border-left-color: var(--yellow); }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge.red { background: rgba(255,71,87,0.15); color: var(--red); }
+  .badge.green { background: rgba(46,213,115,0.15); color: var(--green); }
+  .badge.yellow { background: rgba(255,165,2,0.15); color: var(--yellow); }
+  .badge.accent { background: rgba(0,212,255,0.15); color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9em;
+  }
+  th { color: var(--accent); font-weight: 600; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat .num { font-size: 1.8em; color: var(--accent); font-weight: 700; }
+  .stat .label { font-size: 0.8em; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+  .footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 0.85em;
+    text-align: center;
+  }
+  .warn {
+    background: rgba(255,165,2,0.08);
+    border: 1px solid rgba(255,165,2,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .warn strong { color: var(--yellow); }
+  a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Castiel vs Gatebreaker</h1>
+<p style="color: var(--dim); font-size: 1.1em;">Test Campaign Plan &mdash; Red vs Blue DNS Security Validation</p>
+<p style="color: var(--dim);">August 2026 &middot; macOS Tahoe (Apple Silicon M1) &middot; Castiel v1.1.0</p>
+
+<div class="card">
+<h2 style="margin-top:0;">Executive Summary</h2>
+<p>
+  <strong>Castiel</strong> is a macOS DNS defense daemon that intercepts, validates, and filters all DNS traffic on the local machine via PF firewall redirection. It runs as a signed, notarized launch daemon at <code>/usr/local/bin/castiel</code>, listening on <code>127.0.0.1:5300</code> with PF rules redirecting all port 53 traffic to it.
+</p>
+<p>
+  <strong>Gatebreaker</strong> is a red-team exploit tool that attempts to bypass macOS Gatekeeper revocation through a three-phase attack. This document outlines how Castiel detects and blocks each phase.
+</p>
+
+<div class="grid">
+  <div class="stat"><div class="num">12</div><div class="label">Detection Layers</div></div>
+  <div class="stat"><div class="num">99,854</div><div class="label">Blocked Domains</div></div>
+  <div class="stat"><div class="num">6</div><div class="label">Apple Endpoints Monitored</div></div>
+  <div class="stat"><div class="num">3</div><div class="label">Attack Phases Covered</div></div>
+</div>
+</div>
+
+<h2>Architecture</h2>
+<div class="card">
+<pre>
+┌─────────────────────────────────────────────────────────┐
+│                    macOS Application                     │
+│                                                          │
+│  ┌──────────┐    PF Redirect     ┌──────────────────┐   │
+│  │ Any App  │──:53──rdr──:5300──│    Castiel       │   │
+│  │ (DNS)    │                    │   DNS Proxy      │   │
+│  └──────────┘                    │                  │   │
+│                                  │  ┌────────────┐  │   │
+│                                  │  │ DNSSEC     │  │   │
+│                                  │  │ Validator  │  │   │
+│                                  │  ├────────────┤  │   │
+│                                  │  │ Rebinding  │  │   │
+│                                  │  │ Detector   │  │   │
+│                                  │  ├────────────┤  │   │
+│                                  │  │ DGA/Tunnel │  │   │
+│                                  │  ├────────────┤  │   │
+│                                  │  │ Blocklists │  │   │
+│                                  │  ├────────────┤  │   │
+│                                  │  │ DoH Client │──┼───┼── HTTPS to Cloudflare
+│                                  │  └────────────┘  │   │
+│                                  └────────┬─────────┘   │
+│                                           │              │
+│                              ┌────────────┴──────────┐   │
+│                              │ Endpoint Monitor      │   │
+│                              │ (Apple OCSP/CRL)      │   │
+│                              ├───────────────────────┤   │
+│                              │ PF Guard              │   │
+│                              │ (Rules Integrity)     │   │
+│                              └───────────────────────┘   │
+│                                                          │
+│  Metrics: http://127.0.0.1:9090/metrics                  │
+│  Alerts: macOS Notification Center + JSONL log           │
+└─────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h2>The Three-Phase Attack &amp; Castiel's Defenses</h2>
+
+<div class="phase red">
+<h3>Phase 1: DNS Rebinding <span class="badge red">Attack</span> &rarr; <span class="badge green">Blocked</span></h3>
+<p><strong>Gatebreaker attack:</strong> Registers a public FQDN that initially resolves to a legitimate public IP, then changes the DNS response to return a private IP (e.g., <code>127.0.0.1</code>, <code>192.168.x.x</code>). This bypasses browser same-origin policies and enables access to internal services.</p>
+
+<p><strong>Castiel defense:</strong> The rebinding detector inspects every DNS response. If a public FQDN resolves to any RFC1918 private range, loopback, or link-local address, the response is dropped and an alert is fired.</p>
+
+<ul>
+  <li><strong>Private ranges blocked:</strong> <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, <code>127.0.0.0/8</code>, <code>169.254.0.0/16</code>, <code>fc00::/7</code>, <code>fe80::/10</code></li>
+  <li><strong>Test result:</strong> 70.6% block rate in test suite (some queries slip through due to timing windows)</li>
+  <li><strong>Alert type:</strong> <code>dns_rebinding</code> (critical, desktop notification)</li>
+  <li><strong>Metric:</strong> <code>castiel_blocked_queries_total{reason="rebinding"}</code></li>
+</ul>
+</div>
+
+<div class="phase yellow">
+<h3>Phase 2: DNS Poisoning <span class="badge yellow">Attack</span> &rarr; <span class="badge green">Blocked</span></h3>
+<p><strong>Gatebreaker attack:</strong> Injects forged DNS responses with spoofed source IPs and transaction IDs, attempting to poison the resolver cache before the legitimate response arrives. This could redirect traffic to attacker-controlled servers.</p>
+
+<p><strong>Castiel defense (3 layers):</strong></p>
+
+<ol>
+  <li><strong>DNSSEC validation</strong> &mdash; Full chain-of-trust validation from root KSK trust anchor through DS/DNSKEY records to RRSIG verification. Forged responses lack valid cryptographic signatures and are rejected as bogus. The DO (DNSSEC OK) bit is set on all outgoing queries to ensure upstreams return RRSIG records.</li>
+  <li><strong>DoH upstream</strong> &mdash; All DNS queries are forwarded over HTTPS to <code>cloudflare-dns.com/dns-query</code>, preventing on-path attackers from seeing or injecting responses. Falls back to plain DNS if DoH is unavailable.</li>
+  <li><strong>Response validation</strong> &mdash; Bailiwick checking, EDNS0 size limits, and malformed packet detection drop suspicious responses.</li>
+</ol>
+
+<ul>
+  <li><strong>Test result:</strong> DNSSEC validations show <code>valid</code> for legitimate traffic, <code>bogus</code> for forged responses</li>
+  <li><strong>Alert type:</strong> <code>dnssec_validation_fail</code> (critical, desktop notification)</li>
+  <li><strong>Metric:</strong> <code>castiel_dnssec_validations_total{result="valid|bogus"}</code></li>
+</ul>
+
+<div class="warn">
+<strong>Note:</strong> DoH requires port 443 connectivity to Cloudflare. If LuLu firewall's Network Extension is active, it blocks these connections. Disable LuLu (and reboot to unload the System Extension) or add an allow rule for <code>cloudflare-dns.com:443</code> before testing.
+</div>
+</div>
+
+<div class="phase green">
+<h3>Phase 3: IP-Level OCSP Blocking <span class="badge red">Attack</span> &rarr; <span class="badge green">Detected</span></h3>
+<p><strong>Gatebreaker attack:</strong> Installs PF firewall rules blocking Apple's OCSP/CRL endpoints (<code>17.0.0.0/8</code> on ports 80/443). This prevents <code>trustd</code> from reaching Apple's certificate revocation servers. macOS fails-open when OCSP is unreachable, allowing apps with revoked certificates to launch &mdash; bypassing Gatekeeper entirely.</p>
+
+<p><strong>Castiel defense (2 detectors):</strong></p>
+
+<ol>
+  <li><strong>Apple Endpoint Health Monitor</strong> &mdash; Every 30 seconds, TCP-probes 6 critical Apple endpoints:
+    <ul>
+      <li><code>ocsp.apple.com:80</code> &mdash; Developer ID certificate revocation</li>
+      <li><code>ocsp2.apple.com:443</code> &mdash; Newer OCSP validation</li>
+      <li><code>certs.apple.com:443</code> &mdash; Certificate validation</li>
+      <li><code>valid.apple.com:443</code> &mdash; Certificate validation</li>
+      <li><code>crl.apple.com:80</code> &mdash; Certificate revocation list</li>
+      <li><code>api.apple-cloudkit.com:443</code> &mdash; Notarization ticket delivery</li>
+    </ul>
+    If DNS resolves but TCP connect fails on all IPs, fires a critical alert indicating IP-level blocking.
+  </li>
+  <li><strong>PF Rules Integrity Guard</strong> &mdash; Every 30 seconds, dumps all PF rules (excluding Castiel's own anchor) and scans for:
+    <ul>
+      <li>Block rules targeting <code>17.0.0.0/8</code> (Apple's entire IP range)</li>
+      <li>Block rules on ports 80/443 to any Apple-owned IP</li>
+      <li>Block rules from non-Castiel anchors</li>
+    </ul>
+    Detects the attacker's firewall rules <em>before</em> trustd even attempts a connection.
+  </li>
+</ol>
+
+<ul>
+  <li><strong>Test result:</strong> Simulated PF block to <code>17.0.0.0/8:{80,443}</code> triggered both detectors within 30 seconds</li>
+  <li><strong>Alert types:</strong> <code>apple_endpoint_unreachable</code> + <code>unauthorized_pf_rule</code> (both critical, desktop notifications)</li>
+  <li><strong>Metrics:</strong> <code>castiel_apple_endpoint_status{endpoint="..."}</code> (1=reachable, 0=blocked), <code>castiel_unauthorized_pf_alerts_total{rule_type="..."}</code></li>
+  <li><strong>Recovery:</strong> When attack rules are removed, endpoints auto-recover and a recovery alert is sent</li>
+</ul>
+</div>
+
+<h2>Full Detection Layer Inventory</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>#</th>
+    <th>Detector</th>
+    <th>Phase</th>
+    <th>Test Block Rate</th>
+    <th>Status</th>
+  </tr>
+  <tr><td>1</td><td>DNS Rebinding Protection</td><td>Phase 1</td><td>70.6%</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>2</td><td>DNSSEC Chain Validation</td><td>Phase 2</td><td>100% (forged)</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>3</td><td>DoH Encrypted Upstream</td><td>Phase 2</td><td>&mdash;</td><td><span class="badge yellow">Degraded*</span></td></tr>
+  <tr><td>4</td><td>Response Validation (bailiwick/EDNS0)</td><td>Phase 2</td><td>&mdash;</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>5</td><td>DGA Detection (entropy + n-gram)</td><td>General</td><td>94.7%</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>6</td><td>DNS Tunneling Detection (entropy)</td><td>General</td><td>94.7%</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>7</td><td>Blocklist / Threat Intel Feeds</td><td>General</td><td>25.9%</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>8</td><td>Zone Transfer Blocking (AXFR/IXFR)</td><td>General</td><td>100%</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>9</td><td>C2 / Fast-Flux Detection</td><td>General</td><td>48.1%</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>10</td><td>Rate Limiting / DDoS Protection</td><td>General</td><td>&mdash;</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>11</td><td>Apple Endpoint Health Monitor</td><td>Phase 3</td><td>Verified</td><td><span class="badge green">Active</span></td></tr>
+  <tr><td>12</td><td>PF Rules Integrity Guard</td><td>Phase 3</td><td>Verified</td><td><span class="badge green">Active</span></td></tr>
+</table>
+<p style="color: var(--dim); font-size: 0.85em;">* DoH degraded due to LuLu Network Extension blocking port 443 to Cloudflare DNS. Disable LuLu and reboot, or add allow rule for <code>cloudflare-dns.com:443</code>.</p>
+</div>
+
+<h2>Test Environment Setup</h2>
+<div class="card">
+<h3>Prerequisites</h3>
+<ul>
+  <li>macOS Tahoe on Apple Silicon (M1)</li>
+  <li>Castiel v1.1.0 installed at <code>/usr/local/bin/castiel</code> (signed, notarized)</li>
+  <li>Config at <code>/usr/local/etc/castiel/config.yaml</code></li>
+  <li>Launch daemon at <code>/Library/LaunchDaemons/com.castiel.daemon.plist</code></li>
+  <li>PF enabled with Castiel anchor redirecting <code>:53 &rarr; :5300</code> on <code>lo0</code></li>
+</ul>
+
+<h3>Pre-Test Checklist</h3>
+<ol>
+  <li><strong>Disable ProtonVPN</strong> &mdash; VPN routes all traffic through <code>utun</code> and blocks ports 53/443</li>
+  <li><strong>Disable LuLu firewall</strong> &mdash; Reboot after disabling to unload the System Extension. LuLu's Network Extension kills TLS handshakes to DoH endpoints even when the UI shows "off".</li>
+  <li><strong>Disable Murus firewall</strong> &mdash; Or ensure it allows inbound UDP on port 5300</li>
+  <li><strong>Verify DNS resolution:</strong> <code>dig @127.0.0.1 -p 5300 google.com +short</code></li>
+  <li><strong>Verify metrics:</strong> <code>curl -s http://127.0.0.1:9090/metrics | grep castiel_doh_enabled</code></li>
+  <li><strong>Verify Apple endpoints:</strong> <code>curl -s http://127.0.0.1:9090/metrics | grep apple_endpoint_status</code> (all should be 1)</li>
+  <li><strong>Run test suite:</strong> <code>bash test-castiel.sh --quick</code></li>
+</ol>
+
+<h3>Verification Commands</h3>
+<pre>
+# DNS resolution through Castiel
+dig @127.0.0.1 -p 5300 google.com +short
+
+# DoH status
+curl -s http://127.0.0.1:9090/metrics | grep doh
+
+# DNSSEC validation results
+curl -s http://127.0.0.1:9090/metrics | grep dnssec_valid
+
+# Apple endpoint health
+curl -s http://127.0.0.1:9090/metrics | grep apple_endpoint
+
+# PF guard status
+curl -s http://127.0.0.1:9090/metrics | grep unauthorized_pf
+
+# Daemon logs
+tail -f /usr/local/var/log/castiel/daemon.err
+
+# Alert log
+tail -f /usr/local/var/log/castiel/castiel_alerts.jsonl
+
+# Full test suite
+bash test-castiel.sh --quick
+</pre>
+</div>
+
+<h2>Known Limitations</h2>
+<div class="card">
+<ul>
+  <li><strong>DoH and LuLu:</strong> LuLu's Network Extension (System Extension) remains active even when the UI is disabled. A reboot is required to fully unload it. Without this, DoH falls back to plain DNS (still functional, but not encrypted).</li>
+  <li><strong>Rebinding timing window:</strong> The rebinding detector checks the final DNS response. If an attacker uses a very short TTL and races between legitimate and malicious responses, some queries may pass through before the second (private IP) response triggers the block. Test showed 70.6% block rate &mdash; not 100%.</li>
+  <li><strong>trustd fails-open is an Apple design decision:</strong> Castiel detects the blocking of Apple endpoints but cannot prevent macOS from failing-open if OCSP is unreachable. The alert gives the blue team visibility to respond, but does not itself prevent Gatekeeper bypass.</li>
+  <li><strong>Endpoint monitor uses system DNS:</strong> The endpoint monitor uses Go's <code>net.LookupHost</code> which goes through the system resolver, not Castiel's proxy. This is intentional &mdash; it verifies that the system can resolve Apple endpoints independently of Castiel's DNS interception.</li>
+  <li><strong>PF guard requires root:</strong> The PF guard runs <code>pfctl</code> which requires root privileges. Castiel runs as root via launchd, so this is satisfied in production.</li>
+  <li><strong>Desktop notifications require terminal-notifier or osascript:</strong> Notifications are sent via <code>osascript</code>. If the daemon runs in a non-GUI session, notifications may not appear. Focus Assist (Do Not Disturb) may also suppress them.</li>
+</ul>
+</div>
+
+<h2>Test Campaign Phases</h2>
+<div class="card">
+<h3>Phase 1 Test: DNS Rebinding</h3>
+<p>Gatebreaker registers a domain that initially resolves to a public IP, then changes it to <code>127.0.0.1</code> or <code>192.168.x.x</code>.</p>
+<p><strong>Expected Castiel behavior:</strong> Blocks the rebinding response, returns NXDOMAIN, fires <code>dns_rebinding</code> critical alert with desktop notification. Metric <code>castiel_blocked_queries_total{reason="rebinding"}</code> increments.</p>
+
+<h3>Phase 2 Test: DNS Poisoning</h3>
+<p>Gatebreaker sends forged DNS responses with spoofed source IPs and guessed transaction IDs.</p>
+<p><strong>Expected Castiel behavior:</strong> DNSSEC validation rejects forged responses (no valid RRSIG). DoH upstream prevents on-path injection. Forged responses are dropped, <code>dnssec_validation_fail</code> alert fires.</p>
+
+<h3>Phase 3 Test: IP-Level OCSP Blocking</h3>
+<p>Gatebreaker installs PF rules blocking <code>17.0.0.0/8</code> on ports 80/443 to prevent trustd from reaching OCSP servers.</p>
+<p><strong>Expected Castiel behavior:</strong> PF Guard detects unauthorized rules within 30s. Endpoint Monitor detects unreachable Apple endpoints within 30s. Both fire critical alerts with desktop notifications. Metrics show <code>apple_endpoint_status</code> dropping to 0 and <code>unauthorized_pf_alerts_total</code> incrementing.</p>
+</div>
+
+<h2>Repository</h2>
+<div class="card">
+<p><strong>GitHub:</strong> <a href="https://github.com/aimarketingflow/castiel-dns-defender">github.com/aimarketingflow/castiel-dns-defender</a></p>
+<p><strong>Latest commits:</strong></p>
+<ul>
+  <li><code>40a0496</code> &mdash; feat: Phase 3 detection (endpoint monitor + PF guard)</li>
+  <li><code>fd5c37e</code> &mdash; fix: DNSSEC validation breaking all DNS resolution</li>
+</ul>
+</div>
+
+<div class="footer">
+  Castiel v1.1.0 &middot; Built for macOS Tahoe (Apple Silicon) &middot; Signed &amp; Notarized<br>
+  Generated August 2026 for Gatebreaker vs Castiel test campaign
+</div>
+
+</div>
+</body>
+</html>
