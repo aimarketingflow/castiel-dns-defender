@@ -43,9 +43,10 @@ class AlertFeed: ObservableObject {
     private let maxAlerts = 200
 
     var logPath: String {
-        let projectRoot = ProcessInfo.processInfo.environment["DAD_ROOT"]
-            ?? FileManager.default.currentDirectoryPath
-        return "\(projectRoot)/data/alerts.log"
+        if let envPath = ProcessInfo.processInfo.environment["CASTIEL_ALERT_LOG"] {
+            return envPath
+        }
+        return "/usr/local/var/log/castiel/castiel_alerts.jsonl"
     }
 
     func startWatching() {
@@ -113,8 +114,10 @@ class AlertFeed: ObservableObject {
         // Try JSON first
         if let data = line.data(using: .utf8) {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                let ts = (json["timestamp"] as? String) ?? ""
-                let date = ISO8601DateFormatter().date(from: ts) ?? Date()
+                let ts = (json["time"] as? String) ?? (json["timestamp"] as? String) ?? ""
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let date = formatter.date(from: ts) ?? ISO8601DateFormatter().date(from: ts) ?? Date()
                 return AlertEntry(
                     timestamp: date,
                     type: (json["type"] as? String) ?? "unknown",
