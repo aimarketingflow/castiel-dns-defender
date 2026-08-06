@@ -35,6 +35,13 @@ type Config struct {
 	EndpointMonitor    EndpointMonitorConfig    `yaml:"endpoint_monitor"`
 	PFGuard            PFGuardConfig            `yaml:"pf_guard"`
 	ShadowQuery        ShadowQueryConfig        `yaml:"shadow_query"`
+	ApplePinning       ApplePinningConfig       `yaml:"apple_pinning"`
+}
+
+type ApplePinningConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	PinFile       string `yaml:"pin_file"`
+	WatchlistFile string `yaml:"watchlist_file"`
 }
 
 type ServerConfig struct {

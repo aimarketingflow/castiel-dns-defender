@@ -56,6 +56,9 @@ type Proxy struct {
 	dnsCalculation   *detectors.DNSCalculationDetector
 	lowSlowExfil     *detectors.LowSlowExfilDetector
 	lookalike        *detectors.LookalikeDetector
+
+	// Tier 3 — infrastructure pinning
+	applePinning     *detectors.ApplePinningDetector
 }
 
 type batchEntry struct {
@@ -98,6 +101,7 @@ func New(cfg *config.Config, bl *blocklists.Manager, am *alerts.Manager) (*Proxy
 		dnsCalculation: detectors.NewDNSCalculationDetector(),
 		lowSlowExfil:   detectors.NewLowSlowExfilDetector(),
 		lookalike:      detectors.NewLookalikeDetector(cfg.LookalikeDetection.ProtectedDomains),
+		applePinning:   detectors.NewApplePinningDetector(detectors.ApplePinningConfig(cfg.ApplePinning)),
 	}
 
 	// Initialize DoH client if enabled
@@ -627,6 +631,21 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 			})
 			p.sendBlocked(w, r)
 			return
+		}
+	}
+
+	// 10b. Apple ASN/IP pinning — detect poisoning with public IPs
+	if p.cfg.ApplePinning.Enabled {
+		if finding := p.applePinning.CheckResponse(resp); finding != nil {
+			metrics.BlockedQueries.WithLabelValues("apple_pin_violation").Inc()
+			p.alerts.Send(alerts.Alert{
+				Type:     "apple_pin_violation",
+				Severity: "critical",
+				Source:   clientIP,
+				Domain:   finding.Domain,
+				Message:  finding.Detail,
+				Time:     startTime,
+			})
 		}
 	}
 
