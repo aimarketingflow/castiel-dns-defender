@@ -34,6 +34,7 @@ type Config struct {
 	LookalikeDetection LookalikeConfig          `yaml:"lookalike_detection"`
 	EndpointMonitor    EndpointMonitorConfig    `yaml:"endpoint_monitor"`
 	PFGuard            PFGuardConfig            `yaml:"pf_guard"`
+	ShadowQuery        ShadowQueryConfig        `yaml:"shadow_query"`
 }
 
 type ServerConfig struct {
@@ -91,6 +92,24 @@ type RebindingProtectionConfig struct {
 	Enabled              bool     `yaml:"enabled"`
 	BlockPublicToPrivate bool     `yaml:"block_public_to_private"`
 	PrivateRanges        []string `yaml:"private_ranges"`
+}
+
+// ShadowQueryConfig enables an out-of-band comparison query sent directly
+// to the local network's resolver (e.g. DHCP-provided gateway) in parallel
+// with the primary DoH-resolved query. This lets Castiel detect and alert
+// on active DNS poisoning attempts on the network even when DoH resolution
+// already protected the client from the poisoned response.
+type ShadowQueryConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Resolver  string `yaml:"resolver"`   // e.g. "192.168.2.1:53" — network resolver to shadow-query
+	TimeoutMs int    `yaml:"timeout_ms"` // shadow query timeout in milliseconds
+}
+
+func (s *ShadowQueryConfig) TimeoutDuration() time.Duration {
+	if s.TimeoutMs <= 0 {
+		return 2 * time.Second
+	}
+	return time.Duration(s.TimeoutMs) * time.Millisecond
 }
 
 type BlocklistsConfig struct {

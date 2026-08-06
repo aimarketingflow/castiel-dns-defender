@@ -150,6 +150,11 @@ var (
 		Name: "castiel_unauthorized_pf_alerts_total",
 		Help: "Unauthorized PF rules detected blocking Apple endpoints",
 	}, []string{"rule_type"})
+
+	ShadowPoisonDetected = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_shadow_poison_detected_total",
+		Help: "DNS poisoning attempts detected via shadow query to the local network resolver (private IP returned for public domain), even though the primary DoH-resolved response was safe",
+	}, []string{"domain"})
 )
 
 func init() {
@@ -161,7 +166,8 @@ func init() {
 		DNSSECDowngradeAlerts, DoHBypassAlerts, ResponseValidationFailures,
 		FastFluxAlerts, DictionaryDGAAlerts, SparseDGAAlerts,
 		CNAMEChainAlerts, DNSCalculationAlerts, LowSlowExfilAlerts, LookalikeAlerts,
-		AppleEndpointUnreachable, AppleEndpointStatus, UnauthorizedPFAlerts)
+		AppleEndpointUnreachable, AppleEndpointStatus, UnauthorizedPFAlerts,
+		ShadowPoisonDetected)
 }
 
 type Server struct {

@@ -78,6 +78,10 @@ case "${1:-toggle}" in
         else
             echo "Castiel is not running."
         fi
+        # Stop socat DNS forwarder
+        launchctl stop com.castiel.socat 2>/dev/null || true
+        launchctl unload /Library/LaunchDaemons/com.castiel.socat.plist 2>/dev/null || true
+        echo "Socat DNS forwarder stopped."
         # Remove PF anchor if still present
         pfctl -a castiel -r 2>/dev/null || true
         echo "PF anchor removed."
@@ -87,6 +91,12 @@ case "${1:-toggle}" in
 
     restore)
         echo "Restoring DNS to DHCP defaults..."
+        # Stop socat forwarder if running
+        launchctl stop com.castiel.socat 2>/dev/null || true
+        launchctl unload /Library/LaunchDaemons/com.castiel.socat.plist 2>/dev/null || true
+        # Kill any lingering socat processes
+        pkill -f "socat.*UDP4-RECVFROM:53" 2>/dev/null || true
+        pkill -f "socat.*TCP4-LISTEN:53" 2>/dev/null || true
         if [ -n "$NETWORK_SERVICE" ]; then
             echo "Clearing custom DNS on: $NETWORK_SERVICE"
             networksetup -setdnsservers "$NETWORK_SERVICE" empty 2>/dev/null || true
@@ -117,7 +127,7 @@ case "${1:-toggle}" in
         echo "  off      - Emergency disable DoH (fall back to plain DNS)"
         echo "  on       - Re-enable DoH"
         echo "  status   - Check Castiel status and DNS configuration"
-        echo "  stop     - Stop Castiel entirely + remove PF redirect + restore DNS"
+        echo "  stop     - Stop Castiel + socat forwarder + remove PF redirect + restore DNS"
         echo "  restore  - Restore DNS to DHCP defaults (emergency — use if internet is broken)"
         echo ""
         echo "If your internet is broken:"

@@ -31,6 +31,7 @@ type Proxy struct {
 	c2          *detectors.C2Detector
 	server         *dns.Server
 	client         *dns.Client
+	shadowClient   *dns.Client
 	dohClient      *DoHClient
 	dnssecValidator *dnssec.Validator
 	upstreamIdx    int
@@ -77,6 +78,10 @@ func New(cfg *config.Config, bl *blocklists.Manager, am *alerts.Manager) (*Proxy
 		client: &dns.Client{
 			Timeout: cfg.Server.TimeoutDuration(),
 			UDPSize: 1232, // RFC-recommended max to prevent IP fragmentation attacks
+		},
+		shadowClient: &dns.Client{
+			Net:     "udp",
+			Timeout: cfg.ShadowQuery.TimeoutDuration(),
 		},
 		connPool:  make(map[string]*dns.Conn),
 		batchSize: 16,
@@ -420,6 +425,16 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
+	// 8a. Shadow query — out-of-band check against local network resolver
+	// to detect poisoning attempts that DoH resolution silently bypassed.
+	if p.cfg.ShadowQuery.Enabled {
+		shadowDomain := ""
+		if len(r.Question) > 0 {
+			shadowDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		go p.shadowQueryCheck(r, resp, shadowDomain, clientIP, startTime)
+	}
+
 	// 8b. Response packet validation (TUDOOR defense)
 	if p.cfg.ResponseValidation.Enabled {
 		if err := detectors.ValidateResponse(resp, r); err != nil {
@@ -682,6 +697,81 @@ func (p *Proxy) forwardPlainDNS(r *dns.Msg) (*dns.Msg, error) {
 	}
 	metrics.UpstreamFailures.WithLabelValues(upstream).Inc()
 	return nil, err
+}
+
+// shadowQueryCheck sends an out-of-band plain DNS query directly to the
+// configured local network resolver (e.g. a DHCP-provided gateway) in
+// parallel with the primary DoH-resolved response. Castiel's DoH resolution
+// bypasses local-network DNS poisoning entirely, which means an on-path
+// attacker's redirect/poison never reaches the primary resolution path — a
+// real defense, but with no visible alert. This shadow query recreates the
+// vulnerable path out-of-band so Castiel can still detect and alert on the
+// attack attempt even though the client was never actually exposed to it.
+func (p *Proxy) shadowQueryCheck(r *dns.Msg, safeResp *dns.Msg, queryDomain, clientIP string, startTime time.Time) {
+	if !p.cfg.ShadowQuery.Enabled || p.cfg.ShadowQuery.Resolver == "" || queryDomain == "" {
+		return
+	}
+	if strings.HasSuffix(queryDomain, ".local") || strings.HasSuffix(queryDomain, ".localhost") {
+		return
+	}
+
+	shadowReq := r.Copy()
+	shadowReq.Id = dns.Id()
+
+	shadowResp, _, err := p.shadowClient.Exchange(shadowReq, p.cfg.ShadowQuery.Resolver)
+	if err != nil || shadowResp == nil {
+		return
+	}
+
+	var poisonedIP string
+	for _, rr := range shadowResp.Answer {
+		switch v := rr.(type) {
+		case *dns.A:
+			if detectors.IsPrivateIP(v.A.String()) {
+				poisonedIP = v.A.String()
+			}
+		case *dns.AAAA:
+			if detectors.IsPrivateIP(v.AAAA.String()) {
+				poisonedIP = v.AAAA.String()
+			}
+		}
+	}
+	if poisonedIP == "" {
+		return
+	}
+
+	// Confirm the safe (DoH-resolved) response did NOT contain the
+	// poisoned IP, proving Castiel's DoH path avoided the attack.
+	clientProtected := true
+	if safeResp != nil {
+		for _, rr := range safeResp.Answer {
+			switch v := rr.(type) {
+			case *dns.A:
+				if v.A.String() == poisonedIP {
+					clientProtected = false
+				}
+			case *dns.AAAA:
+				if v.AAAA.String() == poisonedIP {
+					clientProtected = false
+				}
+			}
+		}
+	}
+
+	metrics.ShadowPoisonDetected.WithLabelValues(queryDomain).Inc()
+	metrics.BlockedQueries.WithLabelValues("shadow_dns_poison").Inc()
+
+	p.alerts.Send(alerts.Alert{
+		Type:     "dns_rebinding",
+		Severity: "critical",
+		Source:   clientIP,
+		Domain:   queryDomain,
+		Message: fmt.Sprintf(
+			"DNS poisoning detected on network resolver %s: %s -> %s (private IP for public domain). Client was protected via DoH: %v",
+			p.cfg.ShadowQuery.Resolver, queryDomain, poisonedIP, clientProtected,
+		),
+		Time: startTime,
+	})
 }
 
 // exchangePooled uses a persistent TCP connection per upstream for reduced latency.
