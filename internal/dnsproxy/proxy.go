@@ -339,38 +339,36 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 			}
 		}
 
-		// 6. C2 / fast-flux detection (basic)
+		// 6. C2 / fast-flux detection (basic) — alert only, do NOT block
+		// CDN domains (Google, Apple, Cloudflare) naturally trigger fast-flux
+		// heuristics due to many IPs and low TTLs.
 		if p.cfg.C2Detection.Enabled {
 			if p.c2.IsSuspicious(domain) {
 				metrics.BlockedQueries.WithLabelValues("c2_fastflux").Inc()
 				p.alerts.Send(alerts.Alert{
 					Type:     "c2_fastflux",
-					Severity: "critical",
+					Severity: "warning",
 					Source:   clientIP,
 					Domain:   domain,
 					Message:  fmt.Sprintf("C2/fast-flux suspected: %s (TTL volatility + IP diversity)", domain),
 					Time:     startTime,
 				})
-				p.sendBlocked(w, r)
-				return
 			}
 		}
 
-		// 6a. Enhanced fast-flux detection (rotation rate, double-flux)
+		// 6a. Enhanced fast-flux detection (rotation rate, double-flux) — alert only
 		if p.cfg.C2Detection.Enabled {
 			if finding := p.fastFlux.Analyze(domain); finding != nil {
 				metrics.FastFluxAlerts.WithLabelValues(finding.Reason).Inc()
 				metrics.BlockedQueries.WithLabelValues("fastflux_enhanced").Inc()
 				p.alerts.Send(alerts.Alert{
 					Type:     "fastflux_enhanced",
-					Severity: "critical",
+					Severity: "warning",
 					Source:   clientIP,
 					Domain:   domain,
 					Message:  finding.Detail,
 					Time:     startTime,
 				})
-				p.sendBlocked(w, r)
-				return
 			}
 		}
 
@@ -550,6 +548,8 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	// 8g. DNS calculation detection (APT12-style IP encoding)
+	// Alert only for "ip_diversity" reason (CDN false positives); block only for
+	// confirmed poisoning patterns (non_routable_public, sequential_octets, etc.)
 	if p.cfg.DNSCalculation.Enabled {
 		queryDomain := ""
 		if len(r.Question) > 0 {
@@ -561,16 +561,23 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 			if finding := p.dnsCalculation.AnalyzeResponse(queryDomain, ips, isPublic); finding != nil {
 				metrics.DNSCalculationAlerts.WithLabelValues(finding.Reason).Inc()
 				metrics.BlockedQueries.WithLabelValues("dns_calculation").Inc()
+				severity := "critical"
+				shouldBlock := finding.Reason == "non_routable_public" || finding.Reason == "sequential_octets"
+				if !shouldBlock {
+					severity = "warning"
+				}
 				p.alerts.Send(alerts.Alert{
 					Type:     "dns_calculation",
-					Severity: "critical",
+					Severity: severity,
 					Source:   clientIP,
 					Domain:   queryDomain,
 					Message:  finding.Detail,
 					Time:     startTime,
 				})
-				p.sendBlocked(w, r)
-				return
+				if shouldBlock {
+					p.sendBlocked(w, r)
+					return
+				}
 			}
 		}
 	}
@@ -685,37 +692,37 @@ func (p *Proxy) forwardUpstream(r *dns.Msg) (*dns.Msg, error) {
 }
 
 func (p *Proxy) forwardPlainDNS(r *dns.Msg) (*dns.Msg, error) {
-	p.mu.Lock()
-	idx := p.upstreamIdx
-	p.upstreamIdx = (p.upstreamIdx + 1) % len(p.cfg.Server.Upstream)
-	p.mu.Unlock()
-
-	upstream := p.cfg.Server.Upstream[idx]
-
-	// Try pooled connection first (TCP for reliability)
-	resp, err := p.exchangePooled(upstream, r)
-	if err == nil {
-		return resp, nil
+	// Race all upstreams in parallel — use first successful response.
+	// This makes Castiel resilient to network switches (WiFi ↔ Thunderbolt)
+	// since whichever path is alive responds first.
+	type result struct {
+		resp     *dns.Msg
+		upstream string
+		err      error
 	}
 
-	// Fallback: direct UDP exchange, then try other upstreams
-	resp, _, err = p.client.Exchange(r, upstream)
-	if err == nil {
-		return resp, nil
+	upstreams := p.cfg.Server.Upstream
+	ch := make(chan result, len(upstreams))
+
+	for _, us := range upstreams {
+		go func(upstream string) {
+			resp, _, err := p.client.Exchange(r, upstream)
+			ch <- result{resp: resp, upstream: upstream, err: err}
+		}(us)
 	}
 
-	// Try remaining upstreams
-	for i := 0; i < len(p.cfg.Server.Upstream)-1; i++ {
-		nextIdx := (idx + i + 1) % len(p.cfg.Server.Upstream)
-		nextUpstream := p.cfg.Server.Upstream[nextIdx]
-		resp, _, err = p.client.Exchange(r, nextUpstream)
-		if err == nil {
-			return resp, nil
+	var lastErr error
+	for i := 0; i < len(upstreams); i++ {
+		res := <-ch
+		if res.err == nil && res.resp != nil {
+			return res.resp, nil
 		}
-		metrics.UpstreamFailures.WithLabelValues(nextUpstream).Inc()
+		if res.err != nil {
+			lastErr = res.err
+			metrics.UpstreamFailures.WithLabelValues(res.upstream).Inc()
+		}
 	}
-	metrics.UpstreamFailures.WithLabelValues(upstream).Inc()
-	return nil, err
+	return nil, lastErr
 }
 
 // shadowQueryCheck sends an out-of-band plain DNS query directly to the

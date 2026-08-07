@@ -31,10 +31,34 @@ func NewManager(cfg config.BlocklistsConfig) *Manager {
 		allowed:  make(map[string]bool),
 	}
 
-	// Initial load
-	m.loadAll()
+	// Load local files synchronously (fast, no network)
+	if m.cfg.CustomAllowFile != "" {
+		m.loadAllowFile(m.cfg.CustomAllowFile)
+	}
+	if m.cfg.CustomBlockFile != "" {
+		m.loadBlockFile(m.cfg.CustomBlockFile)
+	}
+
+	// Load remote feeds asynchronously to avoid blocking DNS listener startup
+	// (prevents bootstrap deadlock when system DNS points to Castiel)
+	go m.loadFeeds()
 
 	return m
+}
+
+func (m *Manager) loadFeeds() {
+	for _, feed := range m.cfg.Feeds {
+		if !feed.Enabled {
+			continue
+		}
+		if err := m.loadFeed(feed); err != nil {
+			log.Printf("Failed to load feed %s: %v", feed.Name, err)
+		}
+	}
+	m.mu.RLock()
+	count := len(m.blocked) + len(m.wildcard)
+	m.mu.RUnlock()
+	log.Printf("Blocklists loaded: %d domains blocked", count)
 }
 
 func (m *Manager) StartRefreshLoop() {
@@ -63,19 +87,7 @@ func (m *Manager) loadAll() {
 	}
 
 	// Load feeds
-	for _, feed := range m.cfg.Feeds {
-		if !feed.Enabled {
-			continue
-		}
-		if err := m.loadFeed(feed); err != nil {
-			log.Printf("Failed to load feed %s: %v", feed.Name, err)
-		}
-	}
-
-	m.mu.RLock()
-	count := len(m.blocked) + len(m.wildcard)
-	m.mu.RUnlock()
-	log.Printf("Blocklists loaded: %d domains blocked", count)
+	m.loadFeeds()
 }
 
 func (m *Manager) IsBlocked(domain string) bool {
