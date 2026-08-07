@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LuLu &amp; Castiel — Interaction Analysis</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --card: #131822;
+    --border: #1e2738;
+    --accent: #00d4ff;
+    --red: #ff4757;
+    --green: #2ed573;
+    --yellow: #ffa502;
+    --orange: #ff6348;
+    --text: #c8d6e5;
+    --dim: #5c6b7f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 40px 20px;
+  }
+  .container { max-width: 950px; margin: 0 auto; }
+  h1 {
+    font-size: 2.2em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  h2 {
+    font-size: 1.5em;
+    color: var(--text);
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.15em;
+    color: var(--accent);
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+  h4 {
+    font-size: 1em;
+    color: var(--yellow);
+    margin-top: 20px;
+    margin-bottom: 6px;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin-bottom: 16px; padding-left: 24px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: var(--card);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .conflict {
+    border-left: 3px solid var(--red);
+    padding-left: 20px;
+    margin-bottom: 24px;
+  }
+  .conflict.amber { border-left-color: var(--yellow); }
+  .conflict.green { border-left-color: var(--green); }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge.red { background: rgba(255,71,87,0.15); color: var(--red); }
+  .badge.green { background: rgba(46,213,115,0.15); color: var(--green); }
+  .badge.yellow { background: rgba(255,165,2,0.15); color: var(--yellow); }
+  .badge.accent { background: rgba(0,212,255,0.15); color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9em;
+  }
+  th { color: var(--accent); font-weight: 600; }
+  .warn {
+    background: rgba(255,71,87,0.08);
+    border: 1px solid rgba(255,71,87,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .warn strong { color: var(--red); }
+  .info {
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .info strong { color: var(--accent); }
+  .footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 0.85em;
+    text-align: center;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>LuLu &amp; Castiel — Interaction Analysis</h1>
+<p style="color: var(--dim); font-size: 1.1em;">How two macOS network tools conflict and what breaks</p>
+<p style="color: var(--dim);">August 2026 &middot; macOS Tahoe (Apple Silicon M1) &middot; Castiel v1.1.1 &middot; LuLu 4.2.1</p>
+
+<div class="card">
+<h2 style="margin-top:0;">Executive Summary</h2>
+<p>
+  <strong>Castiel</strong> uses macOS's BSD Packet Filter (<code>pfctl</code>) to redirect DNS traffic from port 53 to a local proxy on port 5300. <strong>LuLu</strong> uses Apple's Network Extension framework (<code>NEFilterDataProvider</code>) to intercept and filter all outbound socket connections at the application layer. These two mechanisms operate at <em>different layers</em> of the networking stack and interact in ways that can break DNS resolution, kill DoH connections, and cause the WiFi <code>!</code> symbol.
+</p>
+<p>
+  The core problem: <strong>Apple's Network Extension framework intercepts ALL network flows before they reach PF</strong>, and there is no way for LuLu to "bypass" traffic — even when "Allow DNS Traffic" is enabled, macOS still delivers every packet to LuLu for inspection. This adds latency, can kill TLS handshakes to DoH endpoints, and creates race conditions between the two tools.
+</p>
+</div>
+
+<h2>How Each Tool Works</h2>
+<div class="card">
+<h3>Castiel — PF-Based DNS Interception</h3>
+<p>
+  Castiel operates at the <strong>packet layer</strong> using macOS's built-in PF (Packet Filter) firewall. It installs a PF anchor with <code>rdr</code> rules that redirect all DNS traffic (port 53) to a local proxy on port 5300:
+</p>
+<pre>
+rdr pass on lo0 inet proto udp from any to any port 53 -> 127.0.0.1 port 5300
+rdr pass on lo0 inet proto tcp from any to any port 53 -> 127.0.0.1 port 5300
+</pre>
+<p>
+  PF operates <em>below</em> the application layer — it sees packets after they've been routed but before they leave the network interface. Castiel also blocks direct DoH/DoT connections to known public resolvers (port 443/853 to IPs like 1.1.1.1, 8.8.8.8, etc.) to prevent DNS traffic from bypassing its proxy.
+</p>
+<p style="color: var(--dim); font-size: 0.85em;">
+  Note: Apple has stated in <a href="https://developer.apple.com/documentation/technotes/tn3165-packet-filter-is-not-api">TN3165</a> that "Packet Filter is not API" and recommends Network Extension providers instead. However, PF remains the only way to do transparent DNS redirection without a System Extension, and is used by Mullvad VPN, IVPN, and others.
+</p>
+
+<h3>LuLu — Network Extension Socket Filter</h3>
+<p>
+  LuLu operates at the <strong>application/socket layer</strong> using Apple's Network Extension framework. It registers as a <code>NEFilterDataProvider</code> — a System Extension that intercepts every outbound socket connection <em>before</em> it reaches the network stack. For each new flow, LuLu applies a verdict: allow or block.
+</p>
+<p>
+  Critically, <strong>macOS delivers ALL network traffic to LuLu</strong> — there is no way to bypass the Network Extension framework. Even with "Allow DNS Traffic" enabled, macOS still passes DNS flows to LuLu for inspection. LuLu then explicitly allows them, but the inspection adds 20-25ms latency to every UDP DNS query.
+</p>
+<p>
+  LuLu's System Extension (<code>com.objective-see.lulu.extension</code>) runs as a separate process that stays loaded even when the LuLu UI is disabled. Disabling LuLu in the menu bar stops new alerts but the Network Extension remains <code>[activated enabled]</code> until fully deactivated in System Settings or removed via <code>systemextensionsctl</code>.
+</p>
+</div>
+
+<h2>The Packet Processing Order</h2>
+<div class="card">
+<p>
+  According to Apple's Developer Forums, the order of processing on macOS is:
+</p>
+<pre>
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Process                       │
+│                         │                                    │
+│                         ▼                                    │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  1. NEFilterDataProvider (LuLu's Socket Filter)     │    │
+│  │     • Intercepts every new socket flow              │    │
+│  │     • Applies allow/block verdict                   │    │
+│  │     • Can see URL (Network.framework) or IP:port     │    │
+│  │     • "Allow DNS Traffic" = auto-allow UDP/53       │    │
+│  └────────────────────┬────────────────────────────────┘    │
+│                       │ (allowed flows continue)            │
+│                       ▼                                      │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  2. DNS Proxy (if any NEDNSProxyProvider running)   │    │
+│  │     • Only one DNS proxy can run at a time          │    │
+│  │     • Mutually exclusive with NEFilterDataProvider  │    │
+│  └────────────────────┬────────────────────────────────┘    │
+│                       ▼                                      │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  3. VPN (NEPacketTunnelProvider)                    │    │
+│  │     • ProtonVPN, WireGuard, etc.                    │    │
+│  └────────────────────┬────────────────────────────────┘    │
+│                       ▼                                      │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  4. PF (Packet Filter) — Castiel's redirect rules   │    │
+│  │     • rdr pass on lo0 port 53 -> 127.0.0.1:5300     │    │
+│  │     • block out to known DoH resolver IPs           │    │
+│  └────────────────────┬────────────────────────────────┘    │
+│                       ▼                                      │
+│              Network Interface (en0/lo0)                     │
+└─────────────────────────────────────────────────────────────┘
+</pre>
+<p>
+  <strong>LuLu sees traffic first, PF sees it last.</strong> This ordering creates several specific conflicts.
+</p>
+</div>
+
+<h2>Identified Conflicts</h2>
+
+<div class="conflict">
+<h3>Conflict 1: DoH (HTTPS to Cloudflare DNS) Killed Mid-TLS <span class="badge red">Critical</span></h3>
+<p><strong>Symptom:</strong> Castiel's DoH health check fails with <code>read: socket is not connected</code>. The TCP connection to <code>cloudflare-dns.com:443</code> establishes but is killed during the TLS handshake.</p>
+
+<p><strong>Root cause:</strong> LuLu's Network Extension intercepts the HTTPS connection to Cloudflare's DoH endpoint. The flow appears as a TCP connection to <code>104.16.249.249:443</code>. LuLu's "Allow DNS Traffic" setting only auto-allows <strong>UDP port 53</strong> — it does NOT cover HTTPS on port 443 to DNS resolver IPs. If LuLu has no explicit allow rule for <code>castiel</code> or for Cloudflare's IPs on port 443, it may block or delay the connection. The TLS handshake gets killed mid-stream, producing the <code>"socket is not connected"</code> error (POSIX error 57, ENOTCONN).</p>
+
+<p><strong>Why "Allow DNS Traffic" doesn't help:</strong> That setting only auto-allows UDP/53. DoH uses HTTPS (TCP/443), which LuLu treats as a regular HTTPS connection — subject to normal rule evaluation. The LuLu source code explicitly checks for <code>IPPROTO_UDP</code> and port <code>53</code>:</p>
+<pre>
+//check proto (UDP) and port (53)
+if( (IPPROTO_UDP == ((NEFilterSocketFlow*)flow).socketProtocol) &&
+    (YES == [((NWHostEndpoint*)((NEFilterSocketFlow*)flow).remoteEndpoint).port isEqualToString:@"53"]) ) {
+    //allow
+    verdict = [NEFilterNewFlowVerdict allowVerdict];
+}
+</pre>
+<p>No equivalent exists for TCP port 443 to DNS resolver IPs.</p>
+
+<p><strong>Impact on Castiel:</strong> DoH fails, Castiel falls back to plain DNS (still functional but unencrypted). The <code>castiel_doh_enabled</code> metric may show 0. DoH health check logs fill with errors every 30 seconds.</p>
+
+<h4>Fix Options</h4>
+<ul>
+  <li><strong>Best:</strong> Disable LuLu entirely and reboot (unloads the System Extension)</li>
+  <li><strong>Alternative:</strong> Add a LuLu allow rule for <code>/usr/local/bin/castiel</code> (process-based, allows all its connections)</li>
+  <li><strong>Alternative:</strong> Add LuLu allow rules for <code>104.16.249.249:443</code> and <code>104.16.248.249:443</code> (remote endpoint-based)</li>
+  <li><strong>Workaround:</strong> Disable DoH in Castiel config (<code>use_doh: false</code>) — plain DNS still works through PF redirect</li>
+</ul>
+</div>
+
+<div class="conflict">
+<h3>Conflict 2: Orphaned PF Rules Break All DNS <span class="badge red">Critical</span></h3>
+<p><strong>Symptom:</strong> WiFi shows <code>!</code> exclamation mark. No DNS resolution. Internet completely broken.</p>
+
+<p><strong>Root cause:</strong> Castiel's PF redirect rules remain active even when the Castiel daemon is not running. If Castiel crashes or is stopped by launchd, the PF anchor still redirects port 53 → port 5300, but nothing is listening on 5300. Every DNS query goes into a void.</p>
+
+<p><strong>How LuLu makes this worse:</strong> LuLu's Network Extension can cause Castiel to crash indirectly. When LuLu kills DoH connections repeatedly, the DoH health checker logs continuous failures. If this triggers a panic or resource exhaustion in the Go runtime, Castiel exits — but PF rules stay. LuLu itself isn't broken, but its interference with DoH creates the conditions for Castiel to crash.</p>
+
+<p><strong>Timeline of the incident we experienced:</strong></p>
+<ol>
+  <li>Castiel running with PF redirect + DoH enabled</li>
+  <li>LuLu's Network Extension kills DoH TLS handshakes repeatedly</li>
+  <li>Castiel daemon exits (received SIGTERM from launchd during a restart cycle)</li>
+  <li>PF rules remain — port 53 still redirects to 5300</li>
+  <li>Nothing listening on 5300 → all DNS fails → WiFi shows <code>!</code></li>
+</ol>
+
+<p><strong>Fix (already implemented in v1.1.1):</strong></p>
+<ul>
+  <li>All exit paths (crash, panic, SIGTERM, SIGINT) now explicitly call <code>fwMgr.Cleanup()</code> before <code>os.Exit()</code></li>
+  <li><code>pf.Cleanup()</code> flushes both NAT/rdr and filter rules, then removes the anchor</li>
+  <li>launchd plist uses <code>KeepAlive: true</code> to auto-restart within 5 seconds</li>
+</ul>
+</div>
+
+<div class="conflict amber">
+<h3>Conflict 3: UDP DNS Latency Penalty <span class="badge yellow">Moderate</span></h3>
+<p><strong>Symptom:</strong> DNS queries through Castiel are 20-25ms slower than expected.</p>
+
+<p><strong>Root cause:</strong> Even with "Allow DNS Traffic" enabled in LuLu, macOS's Network Extension framework <strong>still delivers every UDP DNS flow to LuLu for inspection</strong>. LuLu immediately returns an "allow" verdict, but the round-trip through the Network Extension adds 20-25ms. This is a fundamental limitation of Apple's framework — there is no way to bypass it.</p>
+
+<p>As confirmed by LuLu's developer in <a href="https://github.com/objective-see/LuLu/issues/832">GitHub Issue #832</a>:</p>
+<div class="info">
+"The way macOS's Network Extension framework works is that it delivers all network traffic to LuLu. So even with this option enabled, macOS will still pass the traffic to LuLu (there's no way around that). However, LuLu can then explicitly allow that traffic."
+</div>
+
+<p><strong>Impact on Castiel:</strong> DNS queries that should take 3-7ms (LAN) now take 23-32ms. Not breaking, but degrading performance — especially for DNS-heavy workloads. The latency is visible in <code>dig</code> output and in the <code>castiel_query_duration_seconds</code> Prometheus metric.</p>
+
+<p><strong>Fix:</strong> Only way to eliminate this latency is to fully disable LuLu's Network Extension (not just toggle it off in the UI — requires deactivation in System Settings or reboot).</p>
+</div>
+
+<div class="conflict amber">
+<h3>Conflict 4: Castiel's DoH Block Rules vs. LuLu's Allow Rules <span class="badge yellow">Moderate</span></h3>
+<p><strong>Symptom:</strong> Applications that try to use DoH directly (e.g., Chrome's built-in DoH) fail, but LuLu shows them as "allowed".</p>
+
+<p><strong>Root cause:</strong> Castiel installs PF block rules for known DoH resolver IPs (1.1.1.1, 8.8.8.8, etc.) on ports 443 and 853. This is intentional — it prevents apps from bypassing Castiel's DNS filtering. However, LuLu may have allow rules for these same IPs (e.g., if the user allowed Chrome's connections). LuLu's allow verdict lets the flow through the socket filter, but PF then blocks it at the packet layer.</p>
+
+<p>This creates a confusing user experience: LuLu says "allowed" but the connection fails. The user may blame LuLu when Castiel is actually responsible.</p>
+
+<p><strong>Fix:</strong> No fix needed — this is by design. Castiel's PF rules are intentionally more restrictive than LuLu's socket filter rules. Document this behavior for users.</p>
+</div>
+
+<div class="conflict">
+<h3>Conflict 5: LuLu Network Extension Stays Active When "Disabled" <span class="badge red">Critical</span></h3>
+<p><strong>Symptom:</strong> Disabling LuLu in the menu bar UI does not restore DoH connectivity. The <code>!</code> WiFi symbol persists.</p>
+
+<p><strong>Root cause:</strong> LuLu's UI "disable" only stops showing alerts and applying new rules. The underlying System Extension (<code>com.objective-see.lulu.extension</code>) remains <code>[activated enabled]</code> in the system. The Network Extension continues intercepting all flows. This is by design in Apple's Network Extension framework — the extension stays loaded until explicitly deactivated.</p>
+
+<p>Verification command:</p>
+<pre>
+$ systemextensionsctl list
+* * VBG97UB4TA com.objective-see.lulu.extension (4.2.1/4.2.1) LuLu [activated enabled]
+
+$ sudo launchctl list | grep lulu
+- 0 NetworkExtension.com.objective-see.lulu.extension.4.2.1.4.2.1
+</pre>
+
+<p>Even when the LuLu UI shows "disabled", the extension process may still be running and intercepting traffic.</p>
+
+<p><strong>Fix:</strong></p>
+<ol>
+  <li>Go to <strong>System Settings → General → Login Items &amp; Extensions → Network Extensions</strong></li>
+  <li>Click the <strong>(i)</strong> button next to Network Extensions</li>
+  <li>Toggle LuLu to <strong>Off</strong></li>
+  <li><strong>Reboot</strong> — the System Extension is only fully unloaded after a reboot</li>
+</ol>
+<p>Alternatively, remove the extension entirely:</p>
+<pre>
+sudo systemextensionsctl reset
+</pre>
+</div>
+
+<div class="conflict amber">
+<h3>Conflict 6: NEFilterDataProvider and NEDNSSettings Are Mutually Exclusive <span class="badge yellow">Architecture Limitation</span></h3>
+<p><strong>Symptom:</strong> macOS system-level DoH/DoT profiles (e.g., NextDNS, Quad9) cannot be activated while LuLu is running.</p>
+
+<p><strong>Root cause:</strong> Apple's <code>NEFilterDataProvider</code> (LuLu) and <code>NEDNSSettings</code> (system DoH/DoT profiles) are mutually exclusive on macOS (radar 64940244). When a NEFilterDataProvider is active, it takes precedence over DNS Settings. This is an Apple limitation, not a LuLu bug.</p>
+
+<p><strong>Impact on Castiel:</strong> This doesn't directly affect Castiel (which implements its own DoH in Go, not via system profiles). But it means users cannot use macOS's native DoH support alongside LuLu. Castiel's Go-based DoH is a workaround for this limitation — it makes HTTPS connections directly, bypassing the system DNS stack entirely. However, LuLu's socket filter still intercepts those HTTPS connections (see Conflict 1).</p>
+</div>
+
+<div class="conflict amber">
+<h3>Conflict 7: Multiple Network Extensions Conflict <span class="badge yellow">Known macOS Bug</span></h3>
+<p><strong>Symptom:</strong> WiFi <code>!</code> symbol, no internet, DNS failures when both LuLu and another Network Extension (VPN, Cisco AnyConnect, etc.) are active.</p>
+
+<p><strong>Root cause:</strong> macOS has well-documented bugs when multiple Network Extensions are active simultaneously. Apple's Developer Forums confirm that socket filters from different vendors can conflict, causing connections to drop, DNS to fail, and ping to stop working. This has been reported with LuLu + Cisco AnyConnect, LuLu + TripMode, LuLu + Radio Silence, and LuLu + Avast.</p>
+
+<p>From <a href="https://github.com/objective-see/LuLu/issues/355">LuLu Issue #355</a>:</p>
+<div class="info">
+"If Lulu is enabled, when I connect to WiFi it either comes up with <code>!</code> symbol over WiFi icon, or it does connect but then Internet is basically inaccessible. I'm pretty sure it's due to DNS lookups being blocked."
+</div>
+
+<p><strong>Impact on Castiel:</strong> Castiel doesn't use a Network Extension (it uses PF), so it doesn't directly conflict with LuLu at the NE level. However, if a VPN (ProtonVPN) is also running, the combination of LuLu (NE) + ProtonVPN (NE) + Castiel (PF) creates a three-way interaction where DNS traffic is intercepted by LuLu, routed through the VPN tunnel, and then redirected by PF — and any failure at any stage breaks everything.</p>
+</div>
+
+<h2>WiFi <code>!</code> Symbol — Decision Tree</h2>
+<div class="card">
+<p>When you see the <code>!</code> on WiFi, here's how to diagnose which tool is responsible:</p>
+<pre>
+WiFi shows "!" (no internet)
+│
+├── Check: Is Castiel daemon running?
+│   │
+│   ├── NO → Check: Are Castiel PF rules still active?
+│   │   │   $ sudo pfctl -a castiel -s rules
+│   │   │
+│   │   ├── YES → ORPHANED PF RULES
+│   │   │   Fix: $ sudo pfctl -a castiel -r
+│   │   │        $ sudo launchctl start com.castiel.daemon
+│   │   │
+│   │   └── NO → Not a Castiel issue
+│   │
+│   └── YES → Check: Can you resolve DNS directly?
+│       │   $ dig @1.1.1.1 google.com +short
+│       │
+│       ├── YES → Check: Does system DNS work?
+│       │   │   $ dig google.com +short
+│       │   │
+│       │   ├── NO → System DNS server unreachable
+│       │   │   Fix: $ sudo networksetup -setdnsservers Wi-Fi 1.1.1.1 9.9.9.9
+│       │   │
+│       │   └── YES → Check: Is LuLu extension active?
+│       │       │   $ systemextensionsctl list | grep lulu
+│       │       │
+│       │       ├── [activated enabled] → LULU INTERFERENCE
+│       │       │   Fix: Disable in System Settings + Reboot
+│       │       │
+│       │       └── Not listed → Check VPN
+│       │           $ ps aux | grep -E "proton|wireguard|openvpn"
+│       │
+│       └── NO → Check: Is PF blocking outbound?
+│           │   $ sudo pfctl -s rules | grep block
+│           │
+│           ├── Block rules found → PF BLOCKING TRAFFIC
+│           │   Fix: $ sudo pfctl -d
+│           │
+│           └── No block rules → Check: Is LuLu blocking?
+│               Fix: Disable LuLu + Reboot
+</pre>
+</div>
+
+<h2>Recommended Coexistence Strategy</h2>
+<div class="card">
+<h3>For the Gatebreaker Test Campaign</h3>
+<p>The simplest and most reliable approach:</p>
+<ol>
+  <li><strong>Disable LuLu completely</strong> — System Settings → Login Items &amp; Extensions → Network Extensions → LuLu → Off</li>
+  <li><strong>Reboot</strong> — This fully unloads the System Extension</li>
+  <li><strong>Disable ProtonVPN</strong> — VPN + PF + NE is a three-way conflict</li>
+  <li><strong>Start Castiel</strong> — <code>sudo launchctl start com.castiel.daemon</code></li>
+  <li><strong>Verify:</strong> <code>dig @127.0.0.1 -p 5300 google.com +short</code> returns an IP</li>
+  <li><strong>Verify:</strong> <code>curl -s http://127.0.0.1:9090/metrics | grep doh_enabled</code> shows 1</li>
+</ol>
+
+<h3>For Long-Term Production Use</h3>
+<p>If LuLu and Castiel must coexist:</p>
+<ol>
+  <li><strong>Add a LuLu allow rule for <code>/usr/local/bin/castiel</code></strong> — This allows all of Castiel's outbound connections (DoH to Cloudflare, plain DNS to upstreams) without per-IP rules</li>
+  <li><strong>Disable DoH in Castiel</strong> — Set <code>use_doh: false</code> in config. Plain DNS through PF redirect works fine with LuLu (just 20-25ms slower). DoH over HTTPS is where the conflicts happen.</li>
+  <li><strong>Accept the 20-25ms latency penalty</strong> — LuLu's Network Extension will inspect every DNS flow. This is unavoidable.</li>
+  <li><strong>Monitor for orphaned PF rules</strong> — If WiFi breaks, check <code>sudo pfctl -a castiel -s rules</code> first. The v1.1.1 cleanup fixes should prevent this, but monitoring is prudent.</li>
+  <li><strong>Do not run ProtonVPN simultaneously</strong> — Three network-layer tools (LuLu NE + ProtonVPN NE + Castiel PF) is asking for trouble.</li>
+</ol>
+</div>
+
+<h2>Why Not Migrate Castiel to Network Extension?</h2>
+<div class="card">
+<p>
+  Apple's <a href="https://developer.apple.com/documentation/technotes/tn3165-packet-filter-is-not-api">TN3165</a> explicitly recommends moving away from PF to Network Extension providers. However, this creates new problems for Castiel:
+</p>
+
+<table>
+  <tr>
+    <th>Aspect</th>
+    <th>PF (Current)</th>
+    <th>Network Extension</th>
+  </tr>
+  <tr>
+    <td>DNS Redirect</td>
+    <td>Simple <code>rdr</code> rule</td>
+    <td>Requires <code>NEDNSProxyProvider</code> or <code>NETransparentProxyProvider</code></td>
+  </tr>
+  <tr>
+    <td>Coexistence with LuLu</td>
+    <td>PF sees traffic after LuLu — some conflicts</td>
+    <td>Only one DNS proxy at a time; mutually exclusive with LuLu's filter</td>
+  </tr>
+  <tr>
+    <td>Code signing</td>
+    <td>Standard Developer ID</td>
+    <td>Requires <code>com.apple.developer.networking.networkextension</code> entitlement from Apple</td>
+  </tr>
+  <tr>
+    <td>System Extension approval</td>
+    <td>Not needed</td>
+    <td>User must approve multiple System Extension dialogs</td>
+  </tr>
+  <tr>
+    <td>DoH support</td>
+    <td>Castiel implements its own Go DoH client</td>
+    <td><code>NEDNSSettings</code> is mutually exclusive with <code>NEFilterDataProvider</code></td>
+  </tr>
+  <tr>
+    <td>Root access</td>
+    <td>Yes (can modify PF rules)</td>
+    <td>No (System Extension runs non-root, controlled by OS)</td>
+  </tr>
+  <tr>
+    <td>Reliability</td>
+    <td>PF is kernel-level, very reliable</td>
+    <td>Network Extension framework has known bugs (Tahoe attachment issues, multiple NE conflicts)</td>
+  </tr>
+</table>
+
+<p>
+  <strong>Conclusion:</strong> Migrating to Network Extension would make Castiel <em>less</em> compatible with LuLu, not more. The <code>NEDNSProxyProvider</code> is mutually exclusive with LuLu's <code>NEFilterDataProvider</code> — only one can run at a time. Castiel's current PF-based approach is actually the <strong>most compatible</strong> option for coexistence with Network Extension-based tools like LuLu.
+</p>
+
+<p>
+  Mullvad VPN and IVPN have reached the same conclusion — they continue using PF despite Apple's recommendation, because Network Extension doesn't provide the control they need and has reliability issues.
+</p>
+</div>
+
+<h2>Known LuLu Bugs on macOS Tahoe</h2>
+<div class="card">
+<p>From <a href="https://github.com/objective-see/LuLu/issues/825">LuLu Issue #825</a>, LuLu 4.2.1 has a specific incompatibility with macOS Tahoe:</p>
+<ul>
+  <li>Network Extension installs but <strong>never attaches</strong> (refcount stays 0)</li>
+  <li>Provider process never starts</li>
+  <li>LuLu UI never appears (no menu bar icon)</li>
+  <li>No connection prompts are shown</li>
+  <li>System Settings shows LuLu as "Enabled" but it's non-functional</li>
+</ul>
+<p>
+  This means on Tahoe, LuLu may appear to be running but not actually filtering anything — or worse, it may be in a half-attached state that interferes with network traffic without providing any filtering benefit. If you see LuLu in System Settings but no menu bar icon, it's in this broken state.
+</p>
+<p>Check with:</p>
+<pre>
+$ systemextensionsctl list | grep lulu
+$ sudo launchctl list | grep lulu
+$ ps aux | grep com.objective-see.lulu.extension
+</pre>
+<p>If refcount is 0 or the process isn't running, LuLu is non-functional on Tahoe and should be removed:</p>
+<pre>
+sudo systemextensionsctl reset
+</pre>
+</div>
+
+<h2>Summary Matrix</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>Issue</th>
+    <th>Severity</th>
+    <th>Caused By</th>
+    <th>Fix</th>
+  </tr>
+  <tr>
+    <td>DoH TLS handshake killed</td>
+    <td><span class="badge red">Critical</span></td>
+    <td>LuLu NE intercepts 443 to Cloudflare DNS IPs</td>
+    <td>Disable LuLu or add allow rule for castiel</td>
+  </tr>
+  <tr>
+    <td>Orphaned PF rules break DNS</td>
+    <td><span class="badge red">Critical</span></td>
+    <td>Castiel crashes without cleaning up PF</td>
+    <td>Fixed in v1.1.1 — all exit paths call Cleanup()</td>
+  </tr>
+  <tr>
+    <td>LuLu stays active when "disabled"</td>
+    <td><span class="badge red">Critical</span></td>
+    <td>Apple NE framework design</td>
+    <td>Disable in System Settings + reboot</td>
+  </tr>
+  <tr>
+    <td>20-25ms DNS latency</td>
+    <td><span class="badge yellow">Moderate</span></td>
+    <td>LuLu NE inspects every UDP/53 flow</td>
+    <td>Only fix: fully unload LuLu</td>
+  </tr>
+  <tr>
+    <td>DoH block rules confuse users</td>
+    <td><span class="badge yellow">Moderate</span></td>
+    <td>Castiel PF blocks DoH IPs that LuLu allows</td>
+    <td>By design — document it</td>
+  </tr>
+  <tr>
+    <td>System DoH profiles don't work</td>
+    <td><span class="badge yellow">Moderate</span></td>
+    <td>Apple: NEFilterDataProvider ⊥ NEDNSSettings</td>
+    <td>Use Castiel's Go DoH instead (but see Conflict 1)</td>
+  </tr>
+  <tr>
+    <td>Multiple NEs conflict</td>
+    <td><span class="badge yellow">Moderate</span></td>
+    <td>macOS bugs with multiple Network Extensions</td>
+    <td>Don't run LuLu + VPN + Castiel simultaneously</td>
+  </tr>
+  <tr>
+    <td>LuLu broken on Tahoe</td>
+    <td><span class="badge yellow">Tahoe-specific</span></td>
+    <td>LuLu 4.2.1 NE never attaches on Tahoe 26.2</td>
+    <td>Remove LuLu: <code>systemextensionsctl reset</code></td>
+  </tr>
+</table>
+</div>
+
+<div class="footer">
+  Castiel v1.1.1 &amp; LuLu 4.2.1 &middot; macOS Tahoe (Apple Silicon)<br>
+  Research compiled from Apple Developer Forums, GitHub Issues, and live testing<br>
+  Generated August 2026
+</div>
+
+</div>
+</body>
+</html>
