@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stealth Connectivity — Defensive Use of macOS Captive Portal State</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --card: #131822;
+    --border: #1e2738;
+    --accent: #00d4ff;
+    --red: #ff4757;
+    --green: #2ed573;
+    --yellow: #ffa502;
+    --orange: #ff6348;
+    --purple: #a55eea;
+    --text: #c8d6e5;
+    --dim: #5c6b7f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 40px 20px;
+  }
+  .container { max-width: 950px; margin: 0 auto; }
+  h1 {
+    font-size: 2.2em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  h2 {
+    font-size: 1.5em;
+    color: var(--text);
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.15em;
+    color: var(--accent);
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+  h4 {
+    font-size: 1em;
+    color: var(--yellow);
+    margin-top: 20px;
+    margin-bottom: 6px;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin-bottom: 16px; padding-left: 24px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: var(--card);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge.red { background: rgba(255,71,87,0.15); color: var(--red); }
+  .badge.green { background: rgba(46,213,115,0.15); color: var(--green); }
+  .badge.yellow { background: rgba(255,165,2,0.15); color: var(--yellow); }
+  .badge.purple { background: rgba(165,94,234,0.15); color: var(--purple); }
+  .badge.accent { background: rgba(0,212,255,0.15); color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9em;
+  }
+  th { color: var(--accent); font-weight: 600; }
+  .warn {
+    background: rgba(255,71,87,0.08);
+    border: 1px solid rgba(255,71,87,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .warn strong { color: var(--red); }
+  .info {
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .info strong { color: var(--accent); }
+  .idea {
+    background: rgba(165,94,234,0.08);
+    border: 1px solid rgba(165,94,234,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .idea strong { color: var(--purple); }
+  .footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 0.85em;
+    text-align: center;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+  .section-break {
+    height: 1px;
+    background: var(--border);
+    margin: 32px 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Stealth Connectivity</h1>
+<p style="color: var(--dim); font-size: 1.1em;">Defensive use of macOS captive portal state as a network security mechanism</p>
+<p style="color: var(--dim);">August 2026 &middot; Research Report &middot; Castiel DNS Defender</p>
+
+<div class="card">
+<h2 style="margin-top:0;">Executive Summary</h2>
+<p>
+  When macOS's captive portal probe fails, the OS enters a "limited connectivity" state — the WiFi icon shows <code>!</code>, <code>NWPathMonitor</code> reports <code>.unsatisfied</code>, and the system believes there is no internet connection. <strong>But if DNS and routing still work through a local proxy like Castiel, all traffic flows normally while macOS and its applications think they're offline.</strong>
+</p>
+<p>
+  This creates an accidental "stealth mode" where:
+</p>
+<ul>
+  <li>Well-behaved applications defer network activity (reducing noise and attack surface)</li>
+  <li>Malware performing connectivity checks (MITRE ATT&CK T1016.001) may conclude there's no internet and withhold payloads</li>
+  <li>Background sync services (iCloud, Dropbox, Slack) pause, reducing DNS chatter</li>
+  <li>Castiel still sees and filters all DNS traffic that does go through</li>
+</ul>
+<p>
+  This research explores whether this state can be <strong>intentionally induced and maintained</strong> as a defensive mechanism, examines the technical mechanisms involved, and evaluates the trade-offs.
+</p>
+</div>
+
+<h2>How macOS Determines Internet Status</h2>
+<div class="card">
+<h3>The Captive Portal Probe</h3>
+<p>
+  macOS determines internet connectivity through a <strong>one-shot HTTP probe</strong> to Apple's captive portal detection endpoint. When a network interface comes up, <code>mDNSResponder</code> (the system DNS resolver) resolves <code>captive.apple.com</code> and issues an HTTP GET to:
+</p>
+<pre>
+http://captive.apple.com/hotspot-detect.html
+</pre>
+<p>
+  The expected response is a minimal HTML page containing the word <code>"Success"</code>. If the response matches, macOS marks the network as having internet access. If the probe fails (timeout, wrong response, redirect, or DNS failure), macOS marks the network as <strong>captive or limited</strong>.
+</p>
+
+<p>Apple also probes via HTTPS on port 443 to the same host, as documented in their <a href="https://support.apple.com/en-us/101555">enterprise network guide</a>:</p>
+<pre>
+Host: captive.apple.com
+Ports: 443, 80
+Protocol: TCP
+Description: Internet connectivity validation for networks that use captive portals
+</pre>
+
+<h3>The Key Limitation: No Re-Probing</h3>
+<div class="warn">
+<strong>Critical finding:</strong> macOS performs the captive portal probe <em>once</em> during network association. If the probe fails, the <code>!</code> status persists until the user toggles WiFi, reconnects to the network, or reboots. There is <strong>no automatic re-probe mechanism</strong>. This was confirmed through Apple Developer Forums and Mullvad VPN's engineering documentation.
+</div>
+
+<p>
+  This means: if Castiel's PF rules cause the captive probe to fail during startup (by redirecting DNS or blocking the probe host), the <code>!</code> state will persist <strong>indefinitely</strong> — even after Castiel is fully operational and DNS works perfectly.
+</p>
+
+<h3>What the Probe Triggers</h3>
+<p>When the probe fails, macOS sets several internal state flags:</p>
+<table>
+  <tr>
+    <th>API</th>
+    <th>Value</th>
+    <th>Effect</th>
+  </tr>
+  <tr>
+    <td><code>NWPathMonitor</code></td>
+    <td><code>.unsatisfied</code> or <code>.requiresConnection</code></td>
+    <td>Apps see "no network"</td>
+  </tr>
+  <tr>
+    <td><code>SCNetworkReachability</code></td>
+    <td><code>kSCNetworkReachabilityFlagsConnectionRequired</code></td>
+    <td>Legacy apps see "connection required"</td>
+  </tr>
+  <tr>
+    <td><code>scutil --nwi</code></td>
+    <td><code>Reachable</code> but no default route published</td>
+    <td>Routing table may lack default route</td>
+  </tr>
+  <tr>
+    <td>WiFi icon</td>
+    <td><code>!</code> exclamation mark</td>
+    <td>User-visible "no internet" indicator</td>
+  </tr>
+  <tr>
+    <td>Captive Network Assistant</td>
+    <td>May pop up (if portal redirect detected)</td>
+    <td>Browser window for portal login</td>
+  </tr>
+</table>
+</div>
+
+<h2>How Applications Respond to "No Internet"</h2>
+<div class="card">
+
+<h3>Modern Apps: NWPathMonitor + URLSession</h3>
+<p>
+  Since macOS 10.14 / iOS 12, Apple's recommended approach is <code>NWPathMonitor</code> for status monitoring and <code>URLSession</code> with <code>waitsForConnectivity = true</code> for network requests. When the path is <code>.unsatisfied</code>:
+</p>
+<ul>
+  <li><strong>URLSession with <code>waitsForConnectivity</code></strong> — The session <em>waits</em> and does not attempt the request. The task is queued but deferred until the path becomes <code>.satisfied</code>. This is Apple's recommended pattern, meaning most modern macOS apps will <strong>silently defer network activity</strong>.</li>
+  <li><strong>URLSession without <code>waitsForConnectivity</code></strong> — The task fails immediately with <code>NSURLErrorNotConnectedToInternet</code> (-1009).</li>
+  <li><strong>NWConnection</strong> — Connection attempts fail or are delayed depending on configuration.</li>
+</ul>
+
+<p>Apple's own guidance from Developer Forums:</p>
+<div class="info">
+"Don't use [NWPathMonitor] to prevent the user from attempting to perform a network operation, that is, don't 'preflight' your network connections... NWPathMonitor can generate both false positives and false negatives."
+</div>
+<p>
+  Despite this guidance, many apps <em>do</em> preflight with <code>NWPathMonitor</code> and skip network work when the path is <code>.unsatisfied</code>. This is especially common in:
+</p>
+<ul>
+  <li>Background sync services (iCloud, Dropbox, Google Drive, OneDrive)</li>
+  <li>Messaging apps (Slack, Teams, Discord) — presence/status updates</li>
+  <li>Auto-update mechanisms (Sparkle, macOS software update)</li>
+  <li>Telemetry/analytics SDKs</li>
+  <li>Push notification registration (APNs)</li>
+</ul>
+
+<h3>Legacy Apps: SCNetworkReachability</h3>
+<p>
+  Older macOS apps and cross-platform frameworks (Qt, Electron) may use <code>SCNetworkReachabilityGetFlags</code>. When the captive probe fails, the <code>kSCNetworkReachabilityFlagsConnectionRequired</code> flag is set, causing these apps to believe a dial-up or VPN connection needs to be established first.
+</p>
+
+<h3>System Daemons</h3>
+<p>
+  Apple's own system services also respond to the connectivity state:
+</p>
+<ul>
+  <li><strong>mDNSResponder</strong> — May delay publishing DNS resolvers to <code>scutil --dns</code> until the captive probe completes</li>
+  <li><strong>configd</strong> — Delays publishing the default route to the routing table until the probe succeeds or times out</li>
+  <li><strong>softwareupdated</strong> — Won't check for macOS updates</li>
+  <li><strong>cloudd</strong> — iCloud sync pauses</li>
+  <li><strong>apsd</strong> — Push notification delivery may be delayed</li>
+  <li><strong>photolibraryd</strong> — iCloud Photos sync pauses</li>
+</ul>
+
+<p>
+  Mullvad VPN documented this exact problem: <em>"The default route is only published when macOS finishes or times out its captive portal check. The captive portal check involves looking up specific captive portal domains and issuing an HTTP request to the resolved address, and by default, if the app is blocking traffic, none of these network operations can take place, so the timeout is always incurred."</em>
+</p>
+</div>
+
+<h2>How Malware Responds to "No Internet"</h2>
+<div class="card">
+<p>
+  This is where the defensive potential becomes most interesting. MITRE ATT&CK documents this as <a href="https://attack.mitre.org/techniques/T1016/001/">T1016.001 — Internet Connection Discovery</a>:
+</p>
+<div class="info">
+<strong>"Adversaries may check for Internet connectivity on compromised systems. This may be performed during automated discovery and can be accomplished in numerous ways such as using Ping, tracert, and GET requests to websites, or performing initial speed testing to confirm bandwidth. Adversaries may use the results and responses from these requests to determine if the system is capable of communicating with their C2 servers before attempting to connect to them."</strong>
+</div>
+
+<h3>Known Malware Connectivity Check Patterns</h3>
+<p>Documented APT groups and malware families that perform connectivity checks:</p>
+<table>
+  <tr>
+    <th>Threat Actor</th>
+    <th>Method</th>
+    <th>Behavior if "No Internet"</th>
+  </tr>
+  <tr>
+    <td>Gamaredon Group</td>
+    <td>Tests connectivity between compromised hosts</td>
+    <td>Delays C2 beaconing</td>
+  </tr>
+  <tr>
+    <td>APT29</td>
+    <td>Ensures web servers are internet-facing</td>
+    <td>Aborts if unreachable</td>
+  </tr>
+  <tr>
+    <td>Magic Hound</td>
+    <td>HTTP GET to specific website</td>
+    <td>Withholds payload</td>
+  </tr>
+  <tr>
+    <td>SUGARUSH</td>
+    <td>Checks internet connectivity from infected host</td>
+    <td>Sleeps / exits</td>
+  </tr>
+  <tr>
+    <td>Neoichor</td>
+    <td>Contacts external service to verify connectivity</td>
+    <td>Delays execution</td>
+  </tr>
+  <tr>
+    <td>More_eggs</td>
+    <td>HTTP GET requests to check internet</td>
+    <td>Withholds real payload, shows decoy</td>
+  </tr>
+  <tr>
+    <td>GoldFinder</td>
+    <td>HTTP GET requests to check internet</td>
+    <td>Logs and waits</td>
+  </tr>
+  <tr>
+    <td>NKAbuse</td>
+    <td>Uses external services for connectivity check</td>
+    <td>Delays C2 registration</td>
+  </tr>
+</table>
+
+<h3>Common Connectivity Check Methods on macOS</h3>
+<ol>
+  <li><strong><code>ping 8.8.8.8</code></strong> — ICMP echo to Google DNS. <em>This bypasses DNS but not PF. Castiel's PF rules don't block ICMP, so this would succeed.</em></li>
+  <li><strong><code>curl http://example.com</code></strong> — HTTP GET to a known site. <em>Requires DNS, which goes through Castiel. Castiel can log and block this.</em></li>
+  <li><strong><code>scutil --nwi</code></strong> — Checks network reachability flags. <em>Would report "Reachable" but may show no default route. Inconclusive.</em></li>
+  <li><strong><code>networksetup -getinfo Wi-Fi</code></strong> — Gets network config. <em>Shows IP and router, doesn't test connectivity.</em></li>
+  <li><strong><code>getaddrinfo("google.com")</code></strong> — DNS resolution check. <em>Goes through Castiel. Succeeds because Castiel resolves it.</em></li>
+  <li><strong><code>InternetCheckConnection</code> / <code>WinHttpConnect</code></strong> — Windows APIs, not relevant on macOS.</li>
+  <li><strong>Raw socket connect to hard-coded IP</strong> — Bypasses DNS entirely. <em>Castiel can't see this, but PF could block it.</em></li>
+  <li><strong>Check <code>NWPathMonitor</code> status</strong> — Reads system reachability. <em>Would report <code>.unsatisfied</code> in stealth mode. <strong>This is the key — malware using the system API would conclude there's no internet.</strong></em></li>
+</ol>
+
+<h3>The Anti-Analysis Parallel</h3>
+<p>
+  Interestingly, malware analysts see the <em>opposite</em> problem in sandboxes. Malware uses connectivity checks to detect fake internet (INetSim/FakeNet) and bail. From <a href="https://www.reverseengineering.app/en/techniques/internet-connectivity-check">reverseengineering.app</a>:
+</p>
+<div class="info">
+"A connectivity probe is a cheap, low-signal gate. If the world looks fake, the sample sleeps, exits, or withholds its real payload — denying the analyst the behaviour they were hoping to capture."
+</div>
+<p>
+  The stealth connectivity concept inverts this: instead of the <em>attacker</em> checking for fake internet to evade analysis, the <em>defender</em> makes the internet look fake to the attacker. The malware's own evasive behavior works against it.
+</p>
+</div>
+
+<h2>The Mullvad VPN Precedent</h2>
+<div class="card">
+<p>
+  Mullvad VPN already deals with this exact mechanism — and their solution proves the concept works. From their <a href="https://github.com/mullvad/mullvadvpn-app/blob/main/docs/allow-macos-network-check.md">engineering docs</a>:
+</p>
+<div class="info">
+"When macOS is coming back from sleep or connecting to a new WiFi network, it may try to send various requests over the internet before it publishes a default route to the routing table... The default route is only published when macOS finishes or times out its captive portal check."
+</div>
+<p>
+  Mullvad's solution was to run a <strong>custom resolver</strong> that only responds to captive portal domain queries, allowing macOS's probe to succeed while blocking all other DNS. This is the <em>opposite</em> of what we're proposing — Mullvad wants the probe to <em>succeed</em> so the system works normally.
+</p>
+<p>
+  <strong>Castiel could do the inverse:</strong> allow DNS resolution for everything <em>except</em> <code>captive.apple.com</code>, causing the probe to fail while all other DNS works through Castiel's proxy.
+</p>
+</div>
+
+<h2>Proposed Mechanism: "Stealth Mode"</h2>
+<div class="card">
+
+<h3>Concept</h3>
+<p>
+  Castiel intentionally causes macOS's captive portal probe to fail during network association, inducing a persistent "no internet" state while DNS and connectivity actually work through Castiel's proxy.
+</p>
+
+<h3>Implementation Approaches</h3>
+
+<h4>Approach A: DNS Blackhole for captive.apple.com</h4>
+<p>
+  Castiel's DNS proxy returns <code>NXDOMAIN</code> (or <code>0.0.0.0</code>) for queries to <code>captive.apple.com</code> and <code>netcts.cdn-apple.com</code>. macOS's probe can't resolve the host, so the HTTP GET never fires. The probe times out, and macOS enters the <code>!</code> state.
+</p>
+<pre>
+// In Castiel's DNS proxy handler:
+if query == "captive.apple.com" || query == "netcts.cdn-apple.com" {
+    return NXDOMAIN  // or return 0.0.0.0
+}
+// All other queries resolve normally through upstream DNS
+</pre>
+<p>
+  <strong>Pros:</strong> Simple, no PF changes needed, works at the DNS layer. <code>mDNSResponder</code> caches the NXDOMAIN and doesn't retry.
+</p>
+<p>
+  <strong>Cons:</strong> If the system DNS is set to <code>1.1.1.1</code> directly (not through Castiel), this won't work — the query bypasses Castiel. Requires system DNS to be <code>127.0.0.1</code> or PF redirect to be active.
+</p>
+
+<h4>Approach B: PF Block for captive.apple.com IPs</h4>
+<p>
+  Castiel adds a PF rule to block outbound TCP to Apple's captive portal IPs (17.253.27.0/24 range) on ports 80 and 443. The HTTP probe fails to connect, triggering the <code>!</code> state.
+</p>
+<pre>
+block drop out quick on en0 inet proto tcp from any to 17.253.27.0/24 port {80, 443}
+</pre>
+<p>
+  <strong>Pros:</strong> Works regardless of DNS configuration. Blocks both HTTP and HTTPS probes.
+</p>
+<p>
+  <strong>Cons:</strong> Apple uses CDN and may change IPs. Need to resolve and update the block list. Also blocks legitimate Apple services on those IPs (though <code>captive.apple.com</code> is a dedicated endpoint).
+</p>
+
+<h4>Approach C: Transient Block During Network Association</h4>
+<p>
+  Castiel blocks <code>captive.apple.com</code> for only ~10 seconds during daemon startup or when it detects a network state change (via <code>SCNetworkReachability</code> callbacks). This causes the probe to fail during the critical window, then removes the block so all other traffic works normally.
+</p>
+<pre>
+// On network change event:
+1. Block captive.apple.com (DNS NXDOMAIN or PF block)
+2. Wait 10 seconds (probe timeout is typically 5-8 seconds)
+3. Remove block
+4. All other DNS continues working throughout
+</pre>
+<p>
+  <strong>Pros:</strong> Minimal disruption. The block is transient — only long enough to fail the probe. After that, macOS won't re-probe until WiFi toggle.
+</p>
+<p>
+  <strong>Cons:</strong> Requires detecting network state changes. Race condition: if Castiel starts after the probe already succeeded, this won't work. Need to trigger on WiFi reconnect/sleep-wake events.
+</p>
+
+<h4>Approach D: HTTP Interception (Return Non-Success)</h4>
+<p>
+  Castiel's PF rules redirect <code>captive.apple.com:80</code> to a local listener that returns a non-"Success" response (or a redirect, which macOS interprets as a captive portal). This is the most precise approach — it only affects the probe, not other Apple services.
+</p>
+<pre>
+rdr pass on en0 inet proto tcp from any to 17.253.27.0/24 port 80 -> 127.0.0.1 port 5380
+// Local listener on 5380 returns: "<HTML><BODY>Captive</BODY></HTML>"
+// (not "Success", so macOS thinks it's behind a captive portal)
+</pre>
+<p>
+  <strong>Pros:</strong> Most surgical — only intercepts the probe, nothing else. Can return a redirect to trigger captive portal mode (which has stronger "limited connectivity" semantics).
+</p>
+<p>
+  <strong>Cons:</strong> Most complex to implement. Requires a local HTTP listener. Apple may also probe via HTTPS (port 443), which can't be redirected without TLS interception.
+</p>
+</div>
+
+<h2>What Happens in Stealth Mode — Impact Matrix</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>Category</th>
+    <th>Behavior</th>
+    <th>Defensive Value</th>
+    <th>Risk</th>
+  </tr>
+  <tr>
+    <td><strong>Malware using NWPathMonitor</strong></td>
+    <td>Sees <code>.unsatisfied</code>, may skip C2 beacon</td>
+    <td><span class="badge green">High</span></td>
+    <td>None — malware voluntarily withholds</td>
+  </tr>
+  <tr>
+    <td><strong>Malware using ping/curl</strong></td>
+    <td>Ping works (ICMP not blocked), curl works (DNS resolves)</td>
+    <td><span class="badge yellow">Low</span></td>
+    <td>Sophisticated malware detects real internet</td>
+  </tr>
+  <tr>
+    <td><strong>Malware using getaddrinfo</strong></td>
+    <td>DNS resolves through Castiel — succeeds</td>
+    <td><span class="badge yellow">Low</span></td>
+    <td>Only fools malware that checks NWPathMonitor</td>
+  </tr>
+  <tr>
+    <td><strong>Malware with hard-coded IP C2</strong></td>
+    <td>Connects directly, bypasses DNS</td>
+    <td><span class="badge red">None</span></td>
+    <td>Castiel can't see it (but PF could block)</td>
+  </tr>
+  <tr>
+    <td><strong>iCloud / cloud sync</strong></td>
+    <td>Pauses sync, reduces DNS noise</td>
+    <td><span class="badge green">Medium</span></td>
+    <td>User notices missing sync — UX issue</td>
+  </tr>
+  <tr>
+    <td><strong>Slack / Teams / Discord</strong></td>
+    <td>Shows "connecting...", delays presence updates</td>
+    <td><span class="badge green">Medium</span></td>
+    <td>User notices — may think network is broken</td>
+  </tr>
+  <tr>
+    <td><strong>Software updates</strong></td>
+    <td>macOS update check pauses</td>
+    <td><span class="badge yellow">Low</span></td>
+    <td>Security patches delayed — must manually check</td>
+  </tr>
+  <tr>
+    <td><strong>Push notifications (APNs)</strong></td>
+    <td>Delivery may be delayed</td>
+    <td><span class="badge yellow">Low</span></td>
+    <td>iMessage/notifications delayed</td>
+  </tr>
+  <tr>
+    <td><strong>Web browsers</strong></td>
+    <td>Work fine — they don't check NWPathMonitor</td>
+    <td><span class="badge accent">Neutral</span></td>
+    <td>No impact on browsing</td>
+  </tr>
+  <tr>
+    <td><strong>Castiel DNS filtering</strong></td>
+    <td>Still fully operational</td>
+    <td><span class="badge green">High</span></td>
+    <td>No impact — Castiel works regardless</td>
+  </tr>
+  <tr>
+    <td><strong>Background telemetry</strong></td>
+    <td>Most analytics SDKs pause</td>
+    <td><span class="badge green">Medium</span></td>
+    <td>Reduces data exfiltration by legitimate apps</td>
+  </tr>
+</table>
+</div>
+
+<h2>The Threat Model — Who Does This Defend Against?</h2>
+<div class="card">
+
+<h3>Tier 1: Script Kiddies &amp; Automated Malware <span class="badge green">Effective</span></h3>
+<p>
+  Mass-distributed malware (Trojans, adware, commodity stealers) often includes a basic connectivity check before phoning home. These typically use <code>InternetCheckConnection</code>, <code>getaddrinfo</code>, or a simple <code>curl</code>. If the malware uses <code>NWPathMonitor</code> or <code>SCNetworkReachability</code> (which many macOS malware samples do, since it's the path of least resistance), stealth mode would cause them to conclude there's no internet and:
+</p>
+<ul>
+  <li>Sleep indefinitely (waiting for connectivity)</li>
+  <li>Exit without delivering payload</li>
+  <li>Show decoy behavior instead of real payload</li>
+  <li>Delay C2 registration, giving defenders time to detect</li>
+</ul>
+
+<h3>Tier 2: Organized Crime &amp; APTs <span class="badge yellow">Partially Effective</span></h3>
+<p>
+  More sophisticated threat actors (APT29, Gamaredon) perform multi-method connectivity checks. They may:
+</p>
+<ul>
+  <li>Try <code>NWPathMonitor</code> (fooled by stealth mode) <em>AND</em> raw socket connect (not fooled)</li>
+  <li>Use hard-coded IP addresses instead of DNS</li>
+  <li>Check <code>scutil --nwi</code> and compare with actual connectivity</li>
+  <li>Probe multiple endpoints and compare responses</li>
+</ul>
+<p>
+  Stealth mode adds <strong>friction</strong> — the malware has to work harder to determine connectivity, and its behavior may become more detectable (multiple probe attempts, unusual system calls).
+</p>
+
+<h3>Tier 3: Nation-State &amp; Zero-Day <span class="badge red">Ineffective</span></h3>
+<p>
+  Advanced adversaries with custom implants won't be fooled. They'll use raw sockets, hard-coded IPs, and may even check PF rules or running processes. Stealth mode provides no meaningful defense against these actors, but Castiel's DNS filtering still applies.
+</p>
+
+<h3>The "Honeypot" Angle</h3>
+<div class="idea">
+<strong>Key insight:</strong> Malware that detects "no internet" via <code>NWPathMonitor</code> but then tries to connect anyway (via raw socket or hard-coded IP) has just <em>self-identified as sophisticated</em>. Castiel could log this pattern: "Process X checked <code>NWPathMonitor</code>, got <code>.unsatisfied</code>, but attempted a network connection anyway." This is a high-confidence indicator of malicious behavior — legitimate apps that check reachability respect the result.
+</div>
+</div>
+
+<h2>Comparison to Existing Defensive Techniques</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>Technique</th>
+    <th>How It Works</th>
+    <th>Stealth Mode Advantage</th>
+    <th>Stealth Mode Disadvantage</th>
+  </tr>
+  <tr>
+    <td><strong>Airplane Mode</strong></td>
+    <td>Disables all radios</td>
+    <td>Stealth mode allows real connectivity</td>
+    <td>Airplane mode is 100% effective; stealth mode is partial</td>
+  </tr>
+  <tr>
+    <td><strong>Firewall block-all</strong></td>
+    <td>Blocks all outbound traffic</td>
+    <td>Stealth mode allows DNS-filtered traffic</td>
+    <td>Block-all is more thorough; stealth mode is selective</td>
+  </tr>
+  <tr>
+    <td><strong>DNS sinkholing</strong></td>
+    <td>Returns fake IPs for malware domains</td>
+    <td>Stealth mode adds OS-level deception on top</td>
+    <td>Both are bypassable with hard-coded IPs</td>
+  </tr>
+  <tr>
+    <td><strong>Network isolation</strong></td>
+    <td>No network at all</td>
+    <td>Stealth mode allows controlled connectivity</td>
+    <td>Isolation is absolute; stealth mode is deceptive</td>
+  </tr>
+  <tr>
+    <td><strong>Sandbox (FakeNet/INetSim)</strong></td>
+    <td>Fake internet for malware analysis</td>
+    <td>Stealth mode is the inverse — real internet that looks fake</td>
+    <td>Sandboxes are controlled environments; stealth mode is on production machines</td>
+  </tr>
+  <tr>
+    <td><strong>Low Data Mode</strong></td>
+    <td>macOS feature, reduces background data</td>
+    <td>Stealth mode is stronger — apps think there's NO internet</td>
+    <td>Low Data Mode is user-toggleable and well-understood; stealth mode is novel</td>
+  </tr>
+</table>
+</div>
+
+<h2>Risks &amp; Trade-offs</h2>
+<div class="card">
+
+<h3>User Experience Impact <span class="badge yellow">Moderate</span></h3>
+<ul>
+  <li><strong>Persistent <code>!</code> on WiFi icon</strong> — Users may think their network is broken. This is the most visible side effect.</li>
+  <li><strong>iCloud sync pauses</strong> — Files, photos, and notes won't sync until stealth mode is disabled.</li>
+  <li><strong>Push notifications delayed</strong> — iMessage and other push-dependent apps may not receive messages promptly.</li>
+  <li><strong>Software updates pause</strong> — macOS won't automatically check for or install updates.</li>
+  <li><strong>App "offline" states</strong> — Many apps show offline banners or disable features.</li>
+</ul>
+
+<h3>Security Risks <span class="badge red">Requires Mitigation</span></h3>
+<ul>
+  <li><strong>Delayed security patches</strong> — If macOS updates don't auto-check, the system may miss critical patches. <em>Mitigation: manually check for updates periodically, or schedule stealth mode to disable during maintenance windows.</em></li>
+  <li><strong>False sense of security</strong> — Stealth mode doesn't actually block anything. Sophisticated malware bypasses it. <em>Mitigation: present it as a layer, not a primary defense.</em></li>
+  <li><strong>APNs delivery issues</strong> — MDM commands and Find My may not work. <em>Mitigation: not suitable for MDM-managed devices.</em></li>
+  <li><strong>Emergency services</strong> — If the system truly believes it's offline, emergency SOS features may not function. <em>Mitigation: ensure cellular fallback works, or disable stealth mode on detected emergency calls.</em></li>
+</ul>
+
+<h3>Operational Risks <span class="badge yellow">Manageable</span></h3>
+<ul>
+  <li><strong>Non-deterministic</strong> — The <code>!</code> state depends on timing. If Castiel starts after the probe already succeeded, stealth mode won't engage until the next WiFi reconnect.</li>
+  <li><strong>Fragile</strong> — A WiFi toggle or reboot clears the state. Need to re-induce it on every network change.</li>
+  <li><strong>Debugging difficulty</strong> — Other IT tools and support personnel may misinterpret the <code>!</code> as a real network problem.</li>
+  <li><strong>Apple may change behavior</strong> — Apple could add re-probing in a future macOS update, breaking stealth mode.</li>
+</ul>
+</div>
+
+<h2>Legal &amp; Ethical Considerations</h2>
+<div class="card">
+<ul>
+  <li><strong>Deception of system services</strong> — Intentionally causing macOS to report false connectivity state may violate Apple's developer guidelines or terms of use, especially if distributed as a product.</li>
+  <li><strong>Enterprise environment</strong> — In a corporate setting, inducing fake "no internet" states could interfere with MDM, monitoring agents, and security tooling. Should only be used on personal or research machines.</li>
+  <li><strong>Disclosure</strong> — If used in production, users should be informed that the <code>!</code> is intentional and connectivity actually works.</li>
+  <li><strong>Not a substitute for security</strong> — Stealth mode is a deception layer, not a replacement for actual security controls (firewall, EDR, DNS filtering).</li>
+</ul>
+</div>
+
+<h2>Feasibility Assessment</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>Factor</th>
+    <th>Assessment</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>Technical feasibility</td>
+    <td><span class="badge green">High</span></td>
+    <td>DNS NXDOMAIN for captive.apple.com is trivial to implement</td>
+  </tr>
+  <tr>
+    <td>Reliability</td>
+    <td><span class="badge yellow">Medium</span></td>
+    <td>Depends on timing — must be active before probe fires</td>
+  </tr>
+  <tr>
+    <td>Detection by malware</td>
+    <td><span class="badge yellow">Medium</span></td>
+    <td>Fools NWPathMonitor-based checks; raw socket checks bypass it</td>
+  </tr>
+  <tr>
+    <td>User experience</td>
+    <td><span class="badge red">Poor</span></td>
+    <td>Persistent <code>!</code>, paused sync, delayed notifications</td>
+  </tr>
+  <tr>
+    <td>Maintenance burden</td>
+    <td><span class="badge yellow">Medium</span></td>
+    <td>Must re-induce on every WiFi reconnect/sleep-wake</td>
+  </tr>
+  <tr>
+    <td>Compatibility risk</td>
+    <td><span class="badge yellow">Medium</span></td>
+    <td>Apple may change captive probe behavior in future macOS</td>
+  </tr>
+  <tr>
+    <td>Defensive value</td>
+    <td><span class="badge green">Medium-High</span></td>
+    <td>Best as a layer on top of Castiel's DNS filtering, not standalone</td>
+  </tr>
+</table>
+</div>
+
+<h2>Recommendation</h2>
+<div class="card">
+<p>
+  <strong>Stealth mode is a viable defensive deception technique with real value as a secondary layer.</strong> It won't stop sophisticated attackers, but it adds friction for commodity malware and creates a detectable behavioral pattern for malware that tries to bypass it.
+</p>
+
+<h3>Recommended Implementation Path</h3>
+<ol>
+  <li><strong>Phase 1 (Research):</strong> Implement Approach A (DNS NXDOMAIN for <code>captive.apple.com</code>) as a configurable option in Castiel. Test on a research machine to verify the <code>!</code> state persists and DNS still works.</li>
+  <li><strong>Phase 2 (Detection):</strong> Add logging for processes that check <code>NWPathMonitor</code> but then attempt network connections. This "reachability bypass" pattern is a strong indicator of malicious behavior.</li>
+  <li><strong>Phase 3 (Automation):</strong> Use <code>SCNetworkReachability</code> callbacks to detect WiFi reconnects and sleep-wake events, automatically re-inducing stealth mode.</li>
+  <li><strong>Phase 4 (UX):</strong> Add a Castiel status indicator showing "Stealth Mode: Active" so the user understands the <code>!</code> is intentional.</li>
+  <li><strong>Phase 5 (Hardening):</strong> Combine with PF rules to block raw socket connections to known malware C2 IPs, closing the bypass for hard-coded IP malware.</li>
+</ol>
+
+<h3>When NOT to Use</h3>
+<ul>
+  <li>MDM-managed devices (breaks MDM check-in)</li>
+  <li>Devices that rely on Find My or emergency SOS</li>
+  <li>Servers or always-on machines that need automatic updates</li>
+  <li>Shared machines where other users would be confused by the <code>!</code></li>
+  <li>Production environments where paused sync causes data loss</li>
+</ul>
+</div>
+
+<h2>Open Questions for Further Research</h2>
+<div class="card">
+<ol>
+  <li>Does macOS Tahoe (26.x) have any re-probe mechanism that earlier versions lacked?</li>
+  <li>What is the exact timeout for the captive portal probe? (Appears to be 5-8 seconds based on Mullvad's docs, but not officially documented.)</li>
+  <li>Does the HTTPS probe to <code>captive.apple.com:443</code> run in parallel with HTTP, or sequentially? If sequential, blocking only port 80 may be sufficient.</li>
+  <li>Can <code>SCNetworkReachability</code> callbacks be used to detect when macOS is about to probe, allowing a just-in-time block?</li>
+  <li>What percentage of macOS malware actually uses <code>NWPathMonitor</code> vs. raw socket checks? (Requires malware analysis lab testing.)</li>
+  <li>Does Apple's Endpoint Security framework provide visibility into processes that query reachability state?</li>
+  <li>Could stealth mode interfere with macOS's built-in malware protections (XProtect, Gatekeeper) that may need network access?</li>
+  <li>What is the interaction between stealth mode and iCloud Private Relay (which has its own network path management)?</li>
+</ol>
+</div>
+
+<div class="footer">
+  Castiel DNS Defender &middot; Stealth Connectivity Research Report<br>
+  Compiled from Apple Developer Forums, MITRE ATT&CK, Mullvad VPN engineering docs,<br>
+  SANS ISC, reverseengineering.app, and live testing on macOS Tahoe<br>
+  August 2026
+</div>
+
+</div>
+</body>
+</html>
