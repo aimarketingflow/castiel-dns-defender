@@ -236,3 +236,27 @@ shadow_query:
   enabled: true
   resolver: "192.168.2.1:53"  # Mac B bridge0 — the poisoned network path
   timeout_ms: 2000
+
+# ASN/IP Pinning (Spec 48) — validates that DNS responses for pinned critical
+# Apple domains resolve to IPs within Apple's known ranges (AS714 17.0.0.0/8 +
+# CDN partners). Counters Gatebreaker's Spec 47 E1 evasion (public attacker IP
+# instead of the trivially-detected 192.168.0.0). Alert-only by default; set
+# block_mode: true to drop out-of-range responses (may break DNS if ranges are
+# incomplete, so opt-in only).
+asn_pinning:
+  enabled: true
+  ranges_file: "data/apple_ip_ranges.txt"
+  block_mode: false
+  pinned_domains:
+    - "ocsp.apple.com"
+    - "ocsp2.apple.com"
+    - "crl.apple.com"
+    - "valid.apple.com"
+    - "gateway.icloud.com"
+    - "mesu.apple.com"
+    - "swscan.apple.com"
+    - "ppq.apple.com"
+    - "albert.apple.com"
+    - "gs.apple.com"
+    - "xp.apple.com"
+    - "push.apple.com"

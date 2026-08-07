@@ -36,12 +36,26 @@ type Config struct {
 	PFGuard            PFGuardConfig            `yaml:"pf_guard"`
 	ShadowQuery        ShadowQueryConfig        `yaml:"shadow_query"`
 	ApplePinning       ApplePinningConfig       `yaml:"apple_pinning"`
+	ASNPinning         ASNPinningConfig         `yaml:"asn_pinning"`
 }
 
 type ApplePinningConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	PinFile       string `yaml:"pin_file"`
 	WatchlistFile string `yaml:"watchlist_file"`
+}
+
+// ASNPinningConfig configures ASN/IP pinning for critical Apple domains
+// (Spec 48). Validates that DNS responses for pinned domains resolve to IPs
+// within Apple's known ranges (AS714 17.0.0.0/8 + CDN partners), countering
+// Gatebreaker's Spec 47 E1 evasion (public attacker IP instead of 192.168.0.0).
+// Alert-only by default — BlockMode requires explicit opt-in so DNS resolution
+// is never broken by a misconfigured range file.
+type ASNPinningConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	RangesFile    string   `yaml:"ranges_file"`    // path to apple_ip_ranges.txt
+	PinnedDomains []string `yaml:"pinned_domains"` // domains to enforce pinning on
+	BlockMode     bool     `yaml:"block_mode"`     // true=block, false=alert-only (default: false)
 }
 
 type ServerConfig struct {

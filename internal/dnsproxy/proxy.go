@@ -56,9 +56,9 @@ type Proxy struct {
 	dnsCalculation   *detectors.DNSCalculationDetector
 	lowSlowExfil     *detectors.LowSlowExfilDetector
 	lookalike        *detectors.LookalikeDetector
-
 	// Tier 3 — infrastructure pinning
 	applePinning     *detectors.ApplePinningDetector
+	asnPinning       *detectors.ASNPinningDetector
 }
 
 type batchEntry struct {
@@ -102,6 +102,19 @@ func New(cfg *config.Config, bl *blocklists.Manager, am *alerts.Manager) (*Proxy
 		lowSlowExfil:   detectors.NewLowSlowExfilDetector(),
 		lookalike:      detectors.NewLookalikeDetector(cfg.LookalikeDetection.ProtectedDomains),
 		applePinning:   detectors.NewApplePinningDetector(detectors.ApplePinningConfig(cfg.ApplePinning)),
+	}
+
+	// ASN/IP pinning (Spec 48) — counters Spec 47 E1 public-IP evasion.
+	// Alert-only by default; BlockMode requires explicit opt-in. A missing or
+	// unreadable ranges file is a fatal config error when pinning is enabled.
+	if cfg.ASNPinning.Enabled {
+		d, err := detectors.NewASNPinningDetector(cfg.ASNPinning.RangesFile, cfg.ASNPinning.PinnedDomains)
+		if err != nil {
+			return nil, fmt.Errorf("asn_pinning: %w", err)
+		}
+		p.asnPinning = d
+		log.Printf("ASN/IP pinning enabled: %d CIDR ranges loaded from %s, %d pinned domains, block_mode=%v",
+			d.LoadedRangeCount(), cfg.ASNPinning.RangesFile, len(cfg.ASNPinning.PinnedDomains), cfg.ASNPinning.BlockMode)
 	}
 
 	// Initialize DoH client if enabled
@@ -575,6 +588,45 @@ func (p *Proxy) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 					Time:     startTime,
 				})
 				if shouldBlock {
+					p.sendBlocked(w, r)
+					return
+				}
+			}
+		}
+	}
+
+	// 8h. ASN/IP pinning for critical Apple domains (Spec 48)
+	// Counters Spec 47 E1 evasion: validates that pinned domains resolve to
+	// Apple's known ranges (17.0.0.0/8 + CDN partners). Alert-only by default;
+	// BlockMode drops the response only when explicitly configured.
+	if p.cfg.ASNPinning.Enabled && p.asnPinning != nil {
+		queryDomain := ""
+		if len(r.Question) > 0 {
+			queryDomain = strings.TrimSuffix(r.Question[0].Name, ".")
+		}
+		if queryDomain != "" {
+			// ExtractResponseIPs returns the final A/AAAA records, so CNAME
+			// chains are handled by validating the terminal resolved IPs
+			// (Common Mistake 4).
+			ipStrs := detectors.ExtractResponseIPs(resp)
+			ips := make([]net.IP, 0, len(ipStrs))
+			for _, s := range ipStrs {
+				if ip := net.ParseIP(s); ip != nil {
+					ips = append(ips, ip)
+				}
+			}
+			if finding := p.asnPinning.Check(queryDomain, ips); finding != nil {
+				metrics.ASNPinningAlerts.WithLabelValues(finding.Domain).Inc()
+				metrics.BlockedQueries.WithLabelValues("asn_pinning").Inc()
+				p.alerts.Send(alerts.Alert{
+					Type:     "asn_pinning",
+					Severity: "critical",
+					Source:   clientIP,
+					Domain:   finding.Domain,
+					Message:  finding.Detail,
+					Time:     startTime,
+				})
+				if p.cfg.ASNPinning.BlockMode {
 					p.sendBlocked(w, r)
 					return
 				}

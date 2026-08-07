@@ -155,6 +155,11 @@ var (
 		Name: "castiel_shadow_poison_detected_total",
 		Help: "DNS poisoning attempts detected via shadow query to the local network resolver (private IP returned for public domain), even though the primary DoH-resolved response was safe",
 	}, []string{"domain"})
+
+	ASNPinningAlerts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "castiel_asn_pinning_alerts_total",
+		Help: "DNS responses for pinned domains resolving to unexpected IP ranges (Spec 48; counters Spec 47 E1 public-IP evasion)",
+	}, []string{"domain"})
 )
 
 func init() {
@@ -167,7 +172,7 @@ func init() {
 		FastFluxAlerts, DictionaryDGAAlerts, SparseDGAAlerts,
 		CNAMEChainAlerts, DNSCalculationAlerts, LowSlowExfilAlerts, LookalikeAlerts,
 		AppleEndpointUnreachable, AppleEndpointStatus, UnauthorizedPFAlerts,
-		ShadowPoisonDetected)
+		ShadowPoisonDetected, ASNPinningAlerts)
 }
 
 type Server struct {
