@@ -8,9 +8,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/castiel/dns/internal/dnsproxy"
+	"github.com/castiel/dns/internal/firewall"
 )
 
 // maybeRunAsService is a no-op on non-Windows platforms.
@@ -19,7 +19,10 @@ func maybeRunAsService(configPath string) {
 }
 
 // handleSignals manages Unix signals for DoH toggle and graceful shutdown.
-func handleSignals(ctx context.Context, cancel context.CancelFunc, proxy *dnsproxy.Proxy) {
+// fwMgr is passed so PF rules can be cleaned up immediately on SIGTERM/SIGINT,
+// before any sleep — this prevents orphaned PF redirects if launchd sends
+// SIGKILL during the shutdown grace period.
+func handleSignals(ctx context.Context, cancel context.CancelFunc, proxy *dnsproxy.Proxy, fwMgr firewall.Manager) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGUSR2)
 
@@ -42,8 +45,13 @@ func handleSignals(ctx context.Context, cancel context.CancelFunc, proxy *dnspro
 			proxy.EnableDoH()
 		case syscall.SIGINT, syscall.SIGTERM:
 			log.Printf("Received signal %v, shutting down...", sig)
+			// Clean up PF rules FIRST, before anything else, so the system
+			// doesn't lose DNS even if the process is killed mid-shutdown.
+			if fwMgr != nil {
+				fwMgr.Cleanup()
+				log.Printf("Firewall rules cleaned up.")
+			}
 			cancel()
-			time.Sleep(2 * time.Second)
 			log.Printf("Shutdown complete.")
 			return
 		}

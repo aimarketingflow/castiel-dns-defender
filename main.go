@@ -71,13 +71,31 @@ func runDaemon(ctx context.Context, configPath string) {
 	// Initialize DNS proxy server
 	proxy, err := dnsproxy.New(cfg, blocklistMgr, alertMgr)
 	if err != nil {
-		log.Fatalf("Failed to create DNS proxy: %v", err)
+		log.Printf("Failed to create DNS proxy: %v", err)
+		if fwMgr != nil {
+			fwMgr.Cleanup()
+		}
+		os.Exit(1)
 	}
 
-	// Start the proxy
+	// Start the proxy — on error, clean up PF rules before exiting
+	// (log.Fatalf calls os.Exit which skips deferred functions)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("DNS proxy panic: %v", r)
+				if fwMgr != nil {
+					fwMgr.Cleanup()
+				}
+				os.Exit(1)
+			}
+		}()
 		if err := proxy.Start(ctx); err != nil {
-			log.Fatalf("DNS proxy error: %v", err)
+			log.Printf("DNS proxy error: %v", err)
+			if fwMgr != nil {
+				fwMgr.Cleanup()
+			}
+			os.Exit(1)
 		}
 	}()
 
@@ -105,7 +123,7 @@ func runDaemon(ctx context.Context, configPath string) {
 	// Signal handlers (Unix signals; on Windows these are handled via service controls)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	handleSignals(ctx, cancel, proxy)
+	handleSignals(ctx, cancel, proxy, fwMgr)
 }
 
 func loadConfig(path string) (*config.Config, error) {

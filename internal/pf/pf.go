@@ -119,9 +119,15 @@ func (m *Manager) AddDoHBlockIP(ip string) {
 	m.dohIPs = append(m.dohIPs, ip)
 }
 
-// Cleanup removes the PF anchor and rules.
+// Cleanup removes the PF anchor and all associated rules.
+// This flushes both filter rules and NAT/rdr rules, then removes the anchor
+// entirely. Called on graceful shutdown, crash, and panic — ensures the
+// system never gets stuck with orphaned DNS redirect rules.
 func (m *Manager) Cleanup() {
-	// Remove the anchor
-	cmd := exec.Command("pfctl", "-a", m.anchorName, "-r")
-	cmd.Run()
+	// Flush NAT/rdr rules in the anchor
+	exec.Command("pfctl", "-a", m.anchorName, "-s", "nat", "-F", "all").Run()
+	// Flush filter rules in the anchor
+	exec.Command("pfctl", "-a", m.anchorName, "-s", "rules", "-F", "all").Run()
+	// Remove the anchor entirely
+	exec.Command("pfctl", "-a", m.anchorName, "-r").Run()
 }

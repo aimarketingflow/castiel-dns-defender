@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/castiel/dns/internal/dnsproxy"
+	"github.com/castiel/dns/internal/firewall"
 )
 
 // maybeRunAsService checks if the process is running as a Windows Service.
@@ -30,7 +31,7 @@ func maybeRunAsService(configPath string) {
 
 // handleSignals is a no-op on Windows. Signal handling is done via
 // Windows Service controls (see service_windows.go).
-func handleSignals(ctx context.Context, cancel context.CancelFunc, proxy *dnsproxy.Proxy) {
+func handleSignals(ctx context.Context, cancel context.CancelFunc, proxy *dnsproxy.Proxy, fwMgr firewall.Manager) {
 	// On Windows, we don't use Unix signals. The service wrapper handles
 	// stop/shutdown via SCM. For console mode, Ctrl+C is handled by the
 	// Go runtime default behavior (SIGINT → exit).
